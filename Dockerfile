@@ -74,9 +74,17 @@ COPY admin ./admin
 COPY skills ./skills
 COPY entrypoint.sh ./entrypoint.sh
 
+# Owned by `hermes` so `git fetch`/`hermes update` from the Web TUI do not trip
+# "detected dubious ownership" (repos owned by root, commands run as hermes).
 RUN chmod +x /opt/hermes-railway/entrypoint.sh && \
     mkdir -p /data && \
-    chown -R hermes:hermes /data /opt/hermes-railway
+    chown -R hermes:hermes \
+      /opt/hermes \
+      /opt/hermes-webui \
+      /data \
+      /opt/hermes-railway && \
+    git config --system --add safe.directory /opt/hermes && \
+    git config --system --add safe.directory /opt/hermes-webui
 
 EXPOSE 8080
 
