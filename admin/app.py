@@ -6,8 +6,9 @@ Adds one new surface — `/tui` — that exposes an in-browser xterm with two mo
   - Free-form shell: `/bin/bash -i` for users without SSH access who need to
     run other `hermes` CLI commands or peek at `/data` (`/tui/ws/shell`).
 
-Every other path is reverse-proxied to hermes-webui on 127.0.0.1:9119, including
-WebSockets and SSE chat streams.
+Every other path is reverse-proxied to hermes-webui on loopback
+(``HERMES_WEBUI_HOST`` / ``HERMES_WEBUI_PORT``, default ``127.0.0.1:9120``),
+including WebSockets and SSE chat streams.
 
 This wrapper does NOT enforce its own auth; it delegates to hermes-webui's
 existing password gate. The /tui WebSockets validate the `hermes_session`

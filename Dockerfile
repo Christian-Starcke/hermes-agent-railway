@@ -63,7 +63,8 @@ RUN git init . && \
 # Wrapper extras: small Starlette app that exposes /tui (in-browser xterm with
 # OAuth shortcut buttons for `hermes auth add` device-code flows plus a free-
 # form `/bin/bash` pane) and reverse-proxies everything else to hermes-webui on
-# 127.0.0.1:9119. starlette/uvicorn/httpx may already be transitive Hermes
+# loopback (HERMES_WEBUI_HOST / HERMES_WEBUI_PORT; default 127.0.0.1:9120).
+# starlette/uvicorn/httpx may already be transitive Hermes
 # deps, but install explicitly to pin.
 RUN uv pip install --python /opt/hermes/.venv/bin/python --no-cache-dir \
     ptyprocess httpx websockets starlette uvicorn

@@ -1,4 +1,8 @@
-"""Reverse proxy: forwards `/*` (HTTP and WebSocket) to hermes-webui at 127.0.0.1:9119.
+"""Reverse proxy: forwards `/*` (HTTP and WebSocket) to hermes-webui on loopback.
+
+Target host/port come from ``HERMES_WEBUI_HOST`` / ``HERMES_WEBUI_PORT``
+(default ``127.0.0.1:9120``) so ``hermes dashboard`` can use upstream's usual
+9119 inside ``/tui`` without colliding with the WebUI listener.
 
 hermes-webui owns auth, session cookies, SSE chat streams, and almost the entire
 public surface. Our wrapper sits in front purely so we can also serve `/tui`
@@ -28,8 +32,19 @@ from starlette.responses import StreamingResponse, Response
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 
-WEBUI_HOST = "127.0.0.1"
-WEBUI_PORT = 9119
+def _webui_listen_port(raw: str | None, default: int = 9120) -> int:
+    if not raw:
+        return default
+    try:
+        p = int(str(raw).strip(), 10)
+        return p if 1 <= p <= 65535 else default
+    except ValueError:
+        return default
+
+
+WEBUI_HOST = (os.environ.get("HERMES_WEBUI_HOST") or "127.0.0.1").strip() or "127.0.0.1"
+WEBUI_PORT = _webui_listen_port(os.environ.get("HERMES_WEBUI_PORT"))
+
 WEBUI_BASE_URL = f"http://{WEBUI_HOST}:{WEBUI_PORT}"
 WEBUI_WS_BASE = f"ws://{WEBUI_HOST}:{WEBUI_PORT}"
 

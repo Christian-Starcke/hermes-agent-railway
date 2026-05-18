@@ -242,10 +242,12 @@ PY
 fi
 export ADMIN_PASSWORD
 
-# hermes-webui runs internally on 127.0.0.1:9119; our wrapper proxies $PORT -> 9119.
+# hermes-webui listens on loopback (default 127.0.0.1:9120) so upstream
+# `hermes dashboard` (default 9119) can bind when run manually from `/tui`.
+# Our Starlette wrapper still serves the public listener on $PORT.
 export HERMES_WEBUI_PASSWORD="${ADMIN_PASSWORD}"
-export HERMES_WEBUI_HOST="127.0.0.1"
-export HERMES_WEBUI_PORT="9119"
+export HERMES_WEBUI_HOST="${HERMES_WEBUI_HOST:-127.0.0.1}"
+export HERMES_WEBUI_PORT="${HERMES_WEBUI_PORT:-9120}"
 export HERMES_WEBUI_STATE_DIR="${HERMES_HOME}/.hermes/webui"
 # Point hermes-webui at our Hermes Agent install so agent features work
 export HERMES_WEBUI_AGENT_DIR="/opt/hermes"
@@ -282,7 +284,7 @@ start_webui_watchdog() {
   local AS_USER=$1
   set +e
   while true; do
-    printf '\n--- Starting Hermes WebUI on 127.0.0.1:9119 %s ---\n' "$(date)" >> "${WEBUI_LOG}"
+    printf '\n--- Starting Hermes WebUI on %s:%s %s ---\n' "${HERMES_WEBUI_HOST}" "${HERMES_WEBUI_PORT}" "$(date)" >> "${WEBUI_LOG}"
     if [ -n "${AS_USER}" ]; then
       gosu "${AS_USER}" python3 /opt/hermes-webui/server.py >> "${WEBUI_LOG}" 2>&1 < /dev/null &
     else

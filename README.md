@@ -47,6 +47,8 @@ Set these variables:
 | `ADMIN_PASSWORD` | `${{ secret(32) }}` | Recommended | Password for Hermes WebUI (set explicitly in production). If unset, the entrypoint generates one, persists it to `/data/admin.password`, and prints it once to the deploy logs. |
 | `SEARXNG_URL` | `http://${{searxng-railway.RAILWAY_PRIVATE_DOMAIN}}:${{searxng-railway.PORT}}` | Recommended | Private URL for the companion SearXNG service. |
 | `START_GATEWAY` | `false` | Optional | Set to `true` to also run `hermes gateway run --replace` as a background daemon (messaging bridges). Configure channel tokens in WebUI Settings first, then redeploy with this flag. |
+| `HERMES_WEBUI_HOST` | `127.0.0.1` | Optional | Loopback bind address for Hermes WebUI — must reach the proxy target; Railway operators normally leave default. |
+| `HERMES_WEBUI_PORT` | `9120` | Optional | Internal WebUI TCP port. Default frees **9119** for upstream **`hermes dashboard`**, often run manually from **`/tui`**; change only when both processes need different ports on your deployment. |
 
 You can also set provider keys as Railway variables (or configure them later through the WebUI):
 
@@ -187,6 +189,7 @@ API-key providers (OpenRouter, OpenAI, Anthropic, Google Gemini, etc.) use the i
 
 ## Notes
 
+- **Ports:** The public Railway listener stays **`PORT`**. Hermes WebUI listens on **`HERMES_WEBUI_HOST`/`HERMES_WEBUI_PORT`** (default **127.0.0.1:9120**) and the wrapper reverse-proxies to it; upstream **`hermes dashboard`** traditionally binds **9119**, so **`/tui`** shells can run it without conflicting with WebUI under the defaults. Customize the dashboard listener with **`HERMES_DASHBOARD_HOST`** / **`HERMES_DASHBOARD_PORT`** per [Hermes environment variables](https://hermes-agent.nousresearch.com/docs/reference/environment-variables) if needed.
 - **Skills at boot:** Upstream Docker runs `tools/skills_sync.py` from the Hermes install tree to mirror bundled skills onto the volume. This template does **not** run that script; only bundles under [`hermes-agent-railway/skills/`](./skills/) are copied into `/data/skills` each start. Operators who expect **all** upstream stock skills mirrored should sync them manually or adjust the deployment.
 - Hermes Agent is installed from upstream `NousResearch/hermes-agent` (`ARG HERMES_REF=main`). Override with any valid branch, tag, or SHA.
 - Hermes WebUI is pinned to a specific tag (`ARG HERMES_WEBUI_REF=v0.50.278`). Override to upgrade.
