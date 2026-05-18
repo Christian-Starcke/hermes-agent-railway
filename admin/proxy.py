@@ -1,8 +1,10 @@
 """Reverse proxy: forwards `/*` (HTTP and WebSocket) to hermes-webui on loopback.
 
 Target host/port come from ``HERMES_WEBUI_HOST`` / ``HERMES_WEBUI_PORT``
-(default ``127.0.0.1:9120``) so ``hermes dashboard`` can use upstream's usual
-9119 inside ``/tui`` without colliding with the WebUI listener.
+(default ``127.0.0.1:9120``). The upstream ``hermes dashboard`` CLI usually listens on
+**9119** loopback — start it manually (often from ``/tui``). ``admin/dashboard_proxy`` exposes
+that UI under ``/hermes-dashboard`` with ``X-Forwarded-Prefix`` so the SPA resolves assets
+behind Railway's single public ``PORT`` without binding dashboard to ``0.0.0.0``.
 
 hermes-webui owns auth, session cookies, SSE chat streams, and almost the entire
 public surface. Our wrapper sits in front purely so we can also serve `/tui`
@@ -152,16 +154,37 @@ DROPPED_REQUEST_HEADERS = HOP_BY_HOP | {
 # StreamingResponse sets `Transfer-Encoding: chunked` which conflicts.
 DROPPED_RESPONSE_HEADERS = HOP_BY_HOP | {"content-length"}
 
+PROXY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
+
 
 _client: httpx.AsyncClient | None = None
 
 
-def _filter_request_headers(headers) -> dict[str, str]:
-    upstream = {k: v for k, v in headers.items() if k.lower() not in DROPPED_REQUEST_HEADERS}
-    upstream["host"] = f"{WEBUI_HOST}:{WEBUI_PORT}"
+def filter_upstream_request_headers(
+    headers,
+    *,
+    upstream_host: str,
+    upstream_port: int,
+    forwarded_prefix: str | None = None,
+) -> dict[str, str]:
+    upstream = {
+        k: v for k, v in headers.items() if k.lower() not in DROPPED_REQUEST_HEADERS
+    }
+    upstream["host"] = f"{upstream_host}:{upstream_port}"
     upstream = {k: v for k, v in upstream.items() if k.lower() != "origin"}
-    upstream["origin"] = WEBUI_BASE_URL
+    upstream["origin"] = f"http://{upstream_host}:{upstream_port}"
+    if forwarded_prefix:
+        upstream["x-forwarded-prefix"] = forwarded_prefix
     return upstream
+
+
+def _filter_request_headers(headers) -> dict[str, str]:
+    return filter_upstream_request_headers(
+        headers,
+        upstream_host=WEBUI_HOST,
+        upstream_port=WEBUI_PORT,
+        forwarded_prefix=None,
+    )
 
 
 def _filter_response_headers(headers) -> list[tuple[str, str]]:

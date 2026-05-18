@@ -20,8 +20,15 @@ A single password-protected web UI on the Railway public domain ([screenshots](h
 - **Session search**, slash-command autocomplete, streaming SSE responses, multi-modal uploads
 - **Persistent state** on the `/data` volume — config, sessions, skills, workspace, WebUI state
 - **Bundled `searxng-local` skill** so Hermes can query the companion SearXNG service
+- **Official Hermes CLI dashboard** reachable at **`/hermes-dashboard`** on your Railway URL while `hermes dashboard --no-open` runs on loopback inside the container (Hermes SPA expects **`X-Forwarded-Prefix`**; see `admin/dashboard_proxy.py`).
 - **Health check** at `/health` (Railway probe)
 - **Web terminal (`/tui`)** — in-browser xterm with two modes: OAuth shortcut buttons that run `hermes auth add <provider> --type oauth` for ChatGPT (Codex) and Nous Portal device-code flows, plus a free-form `/bin/bash` pane for any other `hermes` CLI command. Useful when you want to use your ChatGPT subscription instead of paying for OpenAI API access, or when you need a shell without SSH access. New sessions automatically inherit the provider you configured (workaround for an upstream hermes-webui bug — see `admin/proxy.py:_active_provider`).
+
+## Kanban & official dashboard vs Web UI
+
+- **Kanban (upstream docs)** lives in the official **`hermes dashboard`** plugin (default bind **`127.0.0.1:9119`**, overridden with **`HERMES_DASHBOARD_HOST`** / **`HERMES_DASHBOARD_PORT`**). On Railway, open **`HERMES_DASHBOARD_MOUNT_PATH`** (default **`/hermes-dashboard`**) after **`hermes dashboard --no-open`** runs inside the container (e.g. from **`/tui`**). That is **not** the community **Hermes WebUI** at **`/`** ([Kanban tutorial](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban-tutorial), [Kanban reference](https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban), [Web dashboard](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard)).
+- **Board progression / dispatcher:** enable **`START_GATEWAY=true`** in this template (or run **`hermes gateway start`** alongside the dashboard as in the Hermes tutorials) so operators can move work forward from the board.
+- **Embedded TUI in the dashboard:** if you set **`HERMES_DASHBOARD_TUI=1`**, you need Hermes’s **`pty`** extra in the install (e.g. `uv pip install -e ".[pty]"` under `/opt/hermes`, same `uv` pattern as the image’s `-e ".[all,messaging]"`); the template Dockerfile already pulls in **`ptyprocess`** for **`/tui`**, which is separate from that Hermes extra.
 
 ## Railway Services
 
@@ -46,9 +53,12 @@ Set these variables:
 | `PORT` | `8080` | Yes | Public HTTP port. |
 | `ADMIN_PASSWORD` | `${{ secret(32) }}` | Recommended | Password for Hermes WebUI (set explicitly in production). If unset, the entrypoint generates one, persists it to `/data/admin.password`, and prints it once to the deploy logs. |
 | `SEARXNG_URL` | `http://${{searxng-railway.RAILWAY_PRIVATE_DOMAIN}}:${{searxng-railway.PORT}}` | Recommended | Private URL for the companion SearXNG service. |
-| `START_GATEWAY` | `false` | Optional | Set to `true` to also run `hermes gateway run --replace` as a background daemon (messaging bridges). Configure channel tokens in WebUI Settings first, then redeploy with this flag. |
+| `START_GATEWAY` | `false` | Optional | Set to `true` to also run `hermes gateway run --replace` as a background daemon (messaging bridges; aligns with **`hermes gateway start`** in Hermes tutorials for Kanban/dispatcher workflows). Configure channel tokens in WebUI Settings first, then redeploy with this flag. |
 | `HERMES_WEBUI_HOST` | `127.0.0.1` | Optional | Loopback bind address for Hermes WebUI — must reach the proxy target; Railway operators normally leave default. |
 | `HERMES_WEBUI_PORT` | `9120` | Optional | Internal WebUI TCP port. Default frees **9119** for upstream **`hermes dashboard`**, often run manually from **`/tui`**; change only when both processes need different ports on your deployment. |
+| `HERMES_DASHBOARD_HOST` | `127.0.0.1` | Optional | [**`hermes dashboard`**](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard) bind address (also **`--host`** in the CLI); default stays on container loopback. Railway does **not** expose a separate public port — use **`HERMES_DASHBOARD_MOUNT_PATH`** on the **`$PORT`** surface instead (`0.0.0.0` alone doesn’t magically map to HTTPS). Also described in [**environment variables**](https://hermes-agent.nousresearch.com/docs/reference/environment-variables). |
+| `HERMES_DASHBOARD_PORT` | `9119` | Optional | Port for **`hermes dashboard`**; must match **`admin/dashboard_proxy.py`**. |
+| `HERMES_DASHBOARD_MOUNT_PATH` | `/hermes-dashboard` | Optional | HTTPS path prefix proxied with **`X-Forwarded-Prefix`**. Avoid names that collide with Hermes WebUI (`/login`, `/health`, `/assets`, **`/tui`**, `/api`, `/ws`, `/settings`, `/chat`). |
 
 You can also set provider keys as Railway variables (or configure them later through the WebUI):
 
@@ -155,6 +165,7 @@ Open `http://localhost:8080` and enter `changeme` at the password prompt.
 ## Operations
 
 - Web UI: `/`
+- **Official Hermes CLI dashboard:** **`/hermes-dashboard`** (configure with **`HERMES_DASHBOARD_MOUNT_PATH`**) — after **`hermes dashboard --no-open`** runs on **`127.0.0.1:9119`** (usually from **`/tui`**). If the process isn’t listening, open this path and you’ll get **502** with hints.
 - Web terminal (OAuth shortcuts + shell): `/tui`
 - Health check: `/health`
 - Gateway log (when `START_GATEWAY=true`): `/data/logs/gateway.log`
@@ -187,9 +198,27 @@ The **`/tui` shortcut OAuth buttons** are only wired for ChatGPT (**Codex**) and
 
 API-key providers (OpenRouter, OpenAI, Anthropic, Google Gemini, etc.) use the in-wizard form on the WebUI's onboarding page — no need to visit `/tui`.
 
+### Official **`hermes dashboard`** on Railway
+
+The CLI uses **`127.0.0.1:9119`** by default (flags **`--host`**, **`--port`**, **`--no-open`**; see [**Web Dashboard**](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard)). That address is **only inside the container** — you cannot browse it directly from your laptop via Railway.
+
+Start it from **`/tui`** (for example **`hermes dashboard --no-open`**) with **[`HERMES_DASHBOARD_HOST`](https://hermes-agent.nousresearch.com/docs/reference/environment-variables)** / **`HERMES_DASHBOARD_PORT`** if you relocate the listener, then visit:
+
+```text
+https://<railway-domain>/hermes-dashboard
+```
+
+The wrapper sets **`X-Forwarded-Prefix: /hermes-dashboard`** when forwarding to **`HERMES_DASHBOARD_*`**, matching how Hermes rewrites SPA assets behind a prefix (`hermes_cli/web_server.py`).
+
+**Kanban:** use this **`https://<railway-domain>/hermes-dashboard`** path (see [Kanban & official dashboard vs Web UI](#kanban--official-dashboard-vs-web-ui) above), not the WebUI root **`/`**.
+
+**Important:** **`0.0.0.0` binding does not give you another published Railway listener** inside this single-service HTTP model — the **`$PORT`** app plus the **`/hermes-dashboard`** proxy is how you expose the CLI dashboard over HTTPS.
+
+**Safety note:** **`/hermes-dashboard` bypasses Hermes WebUI `ADMIN_PASSWORD`.** Whenever **`hermes dashboard`** is listening, anyone who reaches your Railway URL gets Hermes's powerful CLI dashboard ([upstream exposes secrets](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard)). Prefer stopping **`hermes dashboard`** when you do not need it.
+
 ## Notes
 
-- **Ports:** The public Railway listener stays **`PORT`**. Hermes WebUI listens on **`HERMES_WEBUI_HOST`/`HERMES_WEBUI_PORT`** (default **127.0.0.1:9120**) and the wrapper reverse-proxies to it; upstream **`hermes dashboard`** traditionally binds **9119**, so **`/tui`** shells can run it without conflicting with WebUI under the defaults. Customize the dashboard listener with **`HERMES_DASHBOARD_HOST`** / **`HERMES_DASHBOARD_PORT`** per [Hermes environment variables](https://hermes-agent.nousresearch.com/docs/reference/environment-variables) if needed.
+- **Ports:** The public Railway listener stays **`PORT`**. Hermes WebUI listens on **`HERMES_WEBUI_HOST`/`HERMES_WEBUI_PORT`** (default **127.0.0.1:9120**) and is reverse-proxied from **`/`**. The **`hermes dashboard`** subprocess defaults to **`127.0.0.1:9119`** (see **`HERMES_DASHBOARD_*`** defaults in [`entrypoint.sh`](./entrypoint.sh)); traffic is surfaced at **`HERMES_DASHBOARD_MOUNT_PATH`**, not via a separate Railway port.
 - **Skills at boot:** Upstream Docker runs `tools/skills_sync.py` from the Hermes install tree to mirror bundled skills onto the volume. This template does **not** run that script; only bundles under [`hermes-agent-railway/skills/`](./skills/) are copied into `/data/skills` each start. Operators who expect **all** upstream stock skills mirrored should sync them manually or adjust the deployment.
 - Hermes Agent is installed from upstream `NousResearch/hermes-agent` (`ARG HERMES_REF=main`). Override with any valid branch, tag, or SHA.
 - Hermes WebUI is pinned to a specific tag (`ARG HERMES_WEBUI_REF=v0.50.278`). Override to upgrade.

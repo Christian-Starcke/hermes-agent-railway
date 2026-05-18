@@ -248,6 +248,10 @@ export ADMIN_PASSWORD
 export HERMES_WEBUI_PASSWORD="${ADMIN_PASSWORD}"
 export HERMES_WEBUI_HOST="${HERMES_WEBUI_HOST:-127.0.0.1}"
 export HERMES_WEBUI_PORT="${HERMES_WEBUI_PORT:-9120}"
+# Upstream Hermes CLI: `hermes dashboard` reads these defaults (Docker/docs also use them).
+# Keep loopback in Railway builds — exposure is via Uvicorn on $PORT plus /hermes-dashboard proxy.
+export HERMES_DASHBOARD_HOST="${HERMES_DASHBOARD_HOST:-127.0.0.1}"
+export HERMES_DASHBOARD_PORT="${HERMES_DASHBOARD_PORT:-9119}"
 export HERMES_WEBUI_STATE_DIR="${HERMES_HOME}/.hermes/webui"
 # Point hermes-webui at our Hermes Agent install so agent features work
 export HERMES_WEBUI_AGENT_DIR="/opt/hermes"
