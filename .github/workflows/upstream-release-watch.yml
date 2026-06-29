@@ -1,0 +1,92 @@
+name: Upstream release watch
+
+on:
+  schedule:
+    # Poll every 6 hours for new hermes-webui / hermes-agent releases
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      force_redeploy:
+        description: "Bump versions.lock to latest releases and redeploy even if unchanged"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve latest upstream release tags
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          webui=$(gh api repos/nesquena/hermes-webui/releases/latest --jq .tag_name)
+          agent=$(gh api repos/NousResearch/hermes-agent/releases/latest --jq .tag_name)
+          echo "webui=${webui}" >> "$GITHUB_OUTPUT"
+          echo "agent=${agent}" >> "$GITHUB_OUTPUT"
+          echo "Latest hermes-webui: ${webui}"
+          echo "Latest hermes-agent: ${agent}"
+
+      - name: Compare with versions.lock.json
+        id: compare
+        env:
+          LATEST_WEBUI: ${{ steps.latest.outputs.webui }}
+          LATEST_AGENT: ${{ steps.latest.outputs.agent }}
+          FORCE: ${{ github.event.inputs.force_redeploy || 'false' }}
+        run: |
+          set -euo pipefail
+          changed=$(python3 - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+
+          with open("versions.lock.json", encoding="utf-8") as f:
+              lock = json.load(f)
+
+          latest_webui = os.environ["LATEST_WEBUI"]
+          latest_agent = os.environ["LATEST_AGENT"]
+          force = os.environ.get("FORCE", "false") == "true"
+
+          print(f"Locked webui: {lock.get('hermes_webui')} -> latest {latest_webui}")
+          print(f"Locked agent: {lock.get('hermes_agent')} -> latest {latest_agent}")
+
+          changed = force or (
+              lock.get("hermes_webui") != latest_webui
+              or lock.get("hermes_agent") != latest_agent
+          )
+          print(f"Changed: {changed}")
+
+          if changed:
+              lock["hermes_webui"] = latest_webui
+              lock["hermes_agent"] = latest_agent
+              lock["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+              with open("versions.lock.json", "w", encoding="utf-8") as f:
+                  json.dump(lock, f, indent=2)
+                  f.write("\n")
+
+          raise SystemExit(0 if changed else 1)
+          PY
+          ) && echo "changed=true" >> "$GITHUB_OUTPUT" || echo "changed=false" >> "$GITHUB_OUTPUT"
+
+      - name: Commit version bump (triggers Railway redeploy)
+        if: steps.compare.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add versions.lock.json
+          git commit -m "chore: bump upstream Hermes WebUI and agent for Railway rebuild
+
+          hermes-webui: ${{ steps.latest.outputs.webui }}
+          hermes-agent: ${{ steps.latest.outputs.agent }}"
+          git push

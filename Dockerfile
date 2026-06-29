@@ -1,7 +1,9 @@
 FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie
 
-ARG HERMES_REF=v2026.6.5
-ARG HERMES_WEBUI_REF=v0.51.310
+# Pinned by versions.lock.json (auto-bumped via .github/workflows/upstream-release-watch.yml).
+# Override at build time with --build-arg if needed.
+ARG HERMES_REF
+ARG HERMES_WEBUI_REF
 
 ENV PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright \
@@ -32,9 +34,14 @@ RUN apt-get update && \
 
 RUN useradd --system --uid 10000 --create-home --home-dir /home/hermes --shell /bin/bash hermes
 
+COPY versions.lock.json /tmp/versions.lock.json
+
 WORKDIR /opt/hermes
 
-RUN git init . && \
+RUN set -eux; \
+    HERMES_REF="${HERMES_REF:-$(python3 -c "import json; print(json.load(open('/tmp/versions.lock.json'))['hermes_agent'])")}"; \
+    echo "Building Hermes Agent at ${HERMES_REF}"; \
+    git init . && \
     git remote add origin https://github.com/NousResearch/hermes-agent.git && \
     (git fetch --depth 1 origin "${HERMES_REF}" || git fetch --depth 1 origin "refs/tags/${HERMES_REF}:refs/tags/${HERMES_REF}") && \
     git checkout --detach FETCH_HEAD
@@ -53,7 +60,10 @@ RUN chmod -R a+rX /opt/hermes
 # Hermes WebUI: pure Python (stdlib + pyyaml) + vanilla JS, served from /opt/hermes-webui
 WORKDIR /opt/hermes-webui
 
-RUN git init . && \
+RUN set -eux; \
+    HERMES_WEBUI_REF="${HERMES_WEBUI_REF:-$(python3 -c "import json; print(json.load(open('/tmp/versions.lock.json'))['hermes_webui'])")}"; \
+    echo "Building Hermes WebUI at ${HERMES_WEBUI_REF}"; \
+    git init . && \
     git remote add origin https://github.com/nesquena/hermes-webui.git && \
     (git fetch --depth 1 origin "refs/tags/${HERMES_WEBUI_REF}:refs/tags/${HERMES_WEBUI_REF}" || git fetch --depth 1 origin "${HERMES_WEBUI_REF}") && \
     git checkout --detach FETCH_HEAD && \

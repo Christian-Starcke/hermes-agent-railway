@@ -216,10 +216,30 @@ The wrapper sets **`X-Forwarded-Prefix: /hermes-dashboard`** when forwarding to 
 
 **Safety note:** **`/hermes-dashboard` bypasses Hermes WebUI `ADMIN_PASSWORD`.** Whenever **`hermes dashboard`** is listening, anyone who reaches your Railway URL gets Hermes's powerful CLI dashboard ([upstream exposes secrets](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard)). Prefer stopping **`hermes dashboard`** when you do not need it.
 
+## Automatic upstream updates (release-triggered)
+
+This fork tracks [nesquena/hermes-webui](https://github.com/nesquena/hermes-webui) and [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent) **GitHub releases** instead of hard-pinned Dockerfile tags.
+
+| File | Role |
+|------|------|
+| `versions.lock.json` | Records the WebUI + agent release tags baked into the current image |
+| `.github/workflows/upstream-release-watch.yml` | Every 6 hours, checks for new upstream releases |
+
+When a new release is published upstream, the workflow:
+
+1. Updates `versions.lock.json` to the latest tags
+2. Commits and pushes to `main`
+3. Railway rebuilds the `hermes-agent` service (GitHub deploy trigger)
+
+**Manual refresh:** GitHub → Actions → *Upstream release watch* → *Run workflow* → set **force_redeploy** to `true`.
+
+Your `/data` volume (sessions, config, Telegram gateway, etc.) is unchanged across rebuilds.
+
+---
+
 ## Notes
 
 - **Ports:** The public Railway listener stays **`PORT`**. Hermes WebUI listens on **`HERMES_WEBUI_HOST`/`HERMES_WEBUI_PORT`** (default **127.0.0.1:9120**) and is reverse-proxied from **`/`**. The **`hermes dashboard`** subprocess defaults to **`127.0.0.1:9119`** (see **`HERMES_DASHBOARD_*`** defaults in [`entrypoint.sh`](./entrypoint.sh)); traffic is surfaced at **`HERMES_DASHBOARD_MOUNT_PATH`**, not via a separate Railway port.
 - **Skills at boot:** Upstream Docker runs `tools/skills_sync.py` from the Hermes install tree to mirror bundled skills onto the volume. This template does **not** run that script; only bundles under [`hermes-agent-railway/skills/`](./skills/) are copied into `/data/skills` each start. Operators who expect **all** upstream stock skills mirrored should sync them manually or adjust the deployment.
-- Hermes Agent is installed from upstream `NousResearch/hermes-agent` (`ARG HERMES_REF=v2026.6.5`). Override with any valid branch, tag, or SHA.
-- Hermes WebUI is pinned to a specific tag (`ARG HERMES_WEBUI_REF=v0.51.310`). Override to upgrade.
+- Hermes Agent and Hermes WebUI versions come from `versions.lock.json` (see **Automatic upstream updates** above).
 - `/data` stores config, `.env`, sessions, memories, skills, workspace files, logs, and WebUI state.
