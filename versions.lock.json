@@ -1,6 +1,6 @@
 {
-  "hermes_webui": "v0.51.785",
+  "hermes_webui": "v0.51.793",
   "hermes_agent": "v2026.6.19",
-  "updated_at": "2026-07-01T03:53:33Z",
+  "updated_at": "2026-07-01T09:46:27Z",
   "note": "Bumped by .github/workflows/upstream-release-watch.yml when nesquena/hermes-webui or NousResearch/hermes-agent publishes a new GitHub release."
 }
