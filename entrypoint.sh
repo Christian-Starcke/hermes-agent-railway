@@ -17,6 +17,7 @@ ADMIN_PASSWORD_FILE="${HERMES_HOME}/admin.password"
 
 mkdir -p \
   "${HERMES_HOME}/.hermes" \
+  "${HERMES_HOME}/.hermes/plugins" \
   "${HERMES_HOME}/.hermes/webui" \
   "${HERMES_HOME}/cron" \
   "${HERMES_HOME}/home" \
@@ -37,10 +38,103 @@ if [ "$(id -u)" = "0" ]; then
   chown -R hermes:hermes "${HERMES_HOME}" 2>/dev/null || true
 fi
 
-# Do NOT pre-seed .env or config.yaml — hermes-webui's first-run wizard creates
-# them when the user picks a provider and enters an API key. Pre-seeding from
-# /opt/hermes/cli-config.yaml.example sets model.default and makes the WebUI
-# think provider_configured=true, which skips the wizard entirely.
+# Railway ops baseline: deep-merge HERMES_CONFIG_B64 into /data/config.yaml on
+# every boot so model/agent/MCP/auxiliary settings survive redeploys. Volume
+# keys not present in the overlay are preserved; overlay wins on conflicts.
+if [ -n "${HERMES_CONFIG_B64:-}" ]; then
+  python3 - <<PY || true
+import base64, os, pathlib
+import yaml
+
+def deep_merge(base, overlay):
+    if not isinstance(base, dict) or not isinstance(overlay, dict):
+        return overlay
+    merged = dict(base)
+    for key, value in overlay.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+home = pathlib.Path(os.environ.get("HERMES_HOME", "/data"))
+cfg_p = home / "config.yaml"
+raw = os.environ.get("HERMES_CONFIG_B64", "").strip()
+if not raw:
+    raise SystemExit(0)
+try:
+    overlay = yaml.safe_load(base64.b64decode(raw)) or {}
+except Exception as exc:
+    print(f"[entrypoint] HERMES_CONFIG_B64 decode failed: {exc}")
+    raise SystemExit(0)
+if not isinstance(overlay, dict) or not overlay:
+    raise SystemExit(0)
+
+existing = {}
+if cfg_p.exists():
+    try:
+        existing = yaml.safe_load(cfg_p.read_text(encoding="utf-8")) or {}
+    except Exception:
+        existing = {}
+if not isinstance(existing, dict):
+    existing = {}
+
+merged = deep_merge(existing, overlay)
+cfg_p.parent.mkdir(parents=True, exist_ok=True)
+yaml.safe_dump(merged, cfg_p.open("w", encoding="utf-8"), sort_keys=False)
+print("[entrypoint] merged HERMES_CONFIG_B64 into config.yaml")
+PY
+fi
+
+# Do NOT pre-seed .env or config.yaml from static image files — hermes-webui's
+# first-run wizard creates them when the user picks a provider and enters an API
+# key. Pre-seeding from /opt/hermes/cli-config.yaml.example sets model.default
+# and makes the WebUI think provider_configured=true, which skips the wizard.
+#
+# Railway operators may set HERMES_CONFIG_B64 (base64-encoded config.yaml
+# fragment). We deep-merge it onto /data/config.yaml at boot so model, agent,
+# auxiliary, and MCP settings survive redeploys without hand-editing the volume.
+if [ -n "${HERMES_CONFIG_B64:-}" ]; then
+  python3 - <<'PY' || true
+import base64, os, pathlib
+import yaml
+
+home = pathlib.Path(os.environ.get("HERMES_HOME", "/data"))
+cfg_p = home / "config.yaml"
+b64 = (os.environ.get("HERMES_CONFIG_B64") or "").strip()
+if not b64:
+    raise SystemExit(0)
+
+def deep_merge(base, overlay):
+    if not isinstance(base, dict) or not isinstance(overlay, dict):
+        return overlay
+    merged = dict(base)
+    for key, value in overlay.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+try:
+    overlay = yaml.safe_load(base64.b64decode(b64)) or {}
+except Exception as exc:
+    print(f"[entrypoint] HERMES_CONFIG_B64 decode failed: {exc}")
+    raise SystemExit(0)
+
+existing = {}
+if cfg_p.exists():
+    try:
+        existing = yaml.safe_load(cfg_p.read_text(encoding="utf-8")) or {}
+    except Exception:
+        existing = {}
+
+merged = deep_merge(existing, overlay)
+cfg_p.parent.mkdir(parents=True, exist_ok=True)
+yaml.safe_dump(merged, cfg_p.open("w", encoding="utf-8"), sort_keys=False)
+print("[entrypoint] merged HERMES_CONFIG_B64 into config.yaml")
+PY
+fi
 
 # One-shot rescue for users upgrading from earlier image versions that pre-seeded
 # config.yaml: that pattern caused hermes-webui to persist onboarding_completed=true
@@ -221,6 +315,99 @@ if [ -d "/opt/hermes-railway/skills" ]; then
     cp -R "${skill_dir}" "${HERMES_HOME}/skills/${skill_name}"
     echo "Synced Railway skill: ${skill_name}"
   done
+fi
+
+if [ -d "/opt/hermes-railway/plugins" ]; then
+  for plugin_dir in /opt/hermes-railway/plugins/*/; do
+    [ -d "${plugin_dir}" ] || continue
+    plugin_name="$(basename "${plugin_dir}")"
+    rm -rf "${HERMES_HOME}/.hermes/plugins/${plugin_name}"
+    cp -R "${plugin_dir}" "${HERMES_HOME}/.hermes/plugins/${plugin_name}"
+    echo "Synced Railway plugin: ${plugin_name}"
+  done
+fi
+
+# Log plugin versions after sync (helps verify deploys).
+for _plugin_name in "cursor-cloud" "paperclip"; do
+  if [ -f "${HERMES_HOME}/.hermes/plugins/${_plugin_name}/plugin.yaml" ]; then
+    python3 - <<PY || true
+import re
+from pathlib import Path
+
+plugin_name = "${_plugin_name}"
+plugin_dir = Path("/data/.hermes/plugins") / plugin_name
+yaml_text = (plugin_dir / "plugin.yaml").read_text(encoding="utf-8")
+init_text = (plugin_dir / "__init__.py").read_text(encoding="utf-8")
+version = "unknown"
+for line in yaml_text.splitlines():
+    if line.strip().startswith("version:"):
+        version = line.split(":", 1)[1].strip().strip('"').strip("'")
+        break
+prefix = "cursor_" if plugin_name == "cursor-cloud" else "paperclip_"
+tools = sorted(set(re.findall(rf'"{prefix}[a-z_]+"', init_text)))
+print(f"[entrypoint] {plugin_name} plugin version={version} tools_registered={len(tools)}")
+PY
+  fi
+done
+
+# Default webhook URL for Cursor delegations when running on Railway.
+if [ -z "${CURSOR_WEBHOOK_URL:-}" ] && [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
+  export CURSOR_WEBHOOK_URL="https://${RAILWAY_PUBLIC_DOMAIN}/webhooks/cursor"
+fi
+
+python3 - <<'PY' || true
+import os
+from pathlib import Path
+
+import yaml
+
+home = Path(os.environ.get("HERMES_HOME", "/data"))
+cfg_path = home / "config.yaml"
+cfg = {}
+if cfg_path.exists():
+    try:
+        cfg = yaml.safe_load(cfg_path.read_text()) or {}
+    except Exception:
+        cfg = {}
+
+delegation_mode = (os.environ.get("PAPERCLIP_DELEGATION_MODE") or "direct").strip().lower()
+paperclip_configured = bool((os.environ.get("PAPERCLIP_API_TOKEN") or "").strip())
+
+plugins = cfg.setdefault("plugins", {})
+enabled = plugins.setdefault("enabled", [])
+changed = False
+
+if paperclip_configured and "paperclip" not in enabled:
+    enabled.append("paperclip")
+    changed = True
+    print("[entrypoint] enabled paperclip plugin in config.yaml")
+
+if delegation_mode == "paperclip":
+    if "cursor-cloud" in enabled:
+        enabled.remove("cursor-cloud")
+        changed = True
+        print("[entrypoint] disabled cursor-cloud plugin (PAPERCLIP_DELEGATION_MODE=paperclip)")
+elif "cursor-cloud" not in enabled:
+    enabled.append("cursor-cloud")
+    changed = True
+    print("[entrypoint] enabled cursor-cloud plugin in config.yaml")
+
+if changed:
+    cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False))
+PY
+
+CURSOR_POLL_SCRIPT="${HERMES_HOME}/cron/cursor-cloud-poll.sh"
+if [ ! -f "${CURSOR_POLL_SCRIPT}" ]; then
+  cat > "${CURSOR_POLL_SCRIPT}" <<'POLL'
+#!/bin/bash
+set -euo pipefail
+export HERMES_HOME="${HERMES_HOME:-/data}"
+export PATH="/opt/hermes/.venv/bin:/data/.local/bin:${PATH}"
+python3 /data/.hermes/plugins/cursor-cloud/poll_pending.py >> /data/logs/cursor-poll.log 2>&1
+POLL
+  chmod +x "${CURSOR_POLL_SCRIPT}"
+  echo "Installed Cursor poll script at ${CURSOR_POLL_SCRIPT}"
+  echo "Add a Hermes cron job (every 10m) that runs: ${CURSOR_POLL_SCRIPT}"
 fi
 
 if [ -z "${ADMIN_PASSWORD:-}" ]; then
