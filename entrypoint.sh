@@ -372,9 +372,11 @@ if cfg_path.exists():
 
 delegation_mode = (os.environ.get("PAPERCLIP_DELEGATION_MODE") or "direct").strip().lower()
 paperclip_configured = bool((os.environ.get("PAPERCLIP_API_TOKEN") or "").strip())
+cursor_configured = bool((os.environ.get("CURSOR_API_KEY") or "").strip())
 
 plugins = cfg.setdefault("plugins", {})
 enabled = plugins.setdefault("enabled", [])
+toolsets = cfg.setdefault("toolsets", [])
 changed = False
 
 if paperclip_configured and "paperclip" not in enabled:
@@ -382,7 +384,6 @@ if paperclip_configured and "paperclip" not in enabled:
     changed = True
     print("[entrypoint] enabled paperclip plugin in config.yaml")
 
-toolsets = cfg.setdefault("toolsets", [])
 if paperclip_configured and "paperclip" not in toolsets:
     toolsets.append("paperclip")
     changed = True
@@ -397,10 +398,15 @@ if delegation_mode == "paperclip":
         toolsets.remove("cursor_cloud")
         changed = True
         print("[entrypoint] disabled cursor_cloud toolset (PAPERCLIP_DELEGATION_MODE=paperclip)")
-elif "cursor-cloud" not in enabled:
-    enabled.append("cursor-cloud")
-    changed = True
-    print("[entrypoint] enabled cursor-cloud plugin in config.yaml")
+elif cursor_configured:
+    if "cursor-cloud" not in enabled:
+        enabled.append("cursor-cloud")
+        changed = True
+        print("[entrypoint] enabled cursor-cloud plugin in config.yaml")
+    if "cursor_cloud" not in toolsets:
+        toolsets.append("cursor_cloud")
+        changed = True
+        print("[entrypoint] enabled cursor_cloud toolset in config.yaml")
 
 if changed:
     cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False))
