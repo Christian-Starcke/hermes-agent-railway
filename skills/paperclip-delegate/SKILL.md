@@ -1,7 +1,7 @@
 ---
 name: paperclip-delegate
 description: Delegate repository coding work from Hermes to Paperclip workers (Cursor Cloud, etc.)
-version: 1.0.0
+version: 1.1.0
 metadata:
   hermes:
     requires:
@@ -19,6 +19,17 @@ When `PAPERCLIP_DELEGATION_MODE=paperclip`, delegate implementation work through
 Hermes creates and assigns issues; Paperclip heartbeats wake worker agents (e.g. Cursor Cloud via `cursor_cloud` adapter).
 
 **Do not call `cursor_create_agent` in Paperclip mode** — that bypasses the work queue and creates split state.
+
+## Project coordination (Prism Platform)
+
+For `prism-platform-ap` work, align with GitHub Issues + board + notebook (same as `cursor-delegate` v2):
+
+- **Issues**: `prism-platform-ap/prism-platform` (system of record)
+- **Board**: [Prism Platform Sprint](https://github.com/orgs/prism-platform-ap/projects/1)
+- **Notebook**: `prism-platform-ap/prism-playbook` → `TASK_NOTEBOOK.md`
+
+Before delegating: read the notebook, pick the most specific open GitHub issue, reference it in the Paperclip prompt.
+After completion: comment on the GitHub issue with the PR link; update the notebook on milestones.
 
 ## When to delegate via Paperclip
 

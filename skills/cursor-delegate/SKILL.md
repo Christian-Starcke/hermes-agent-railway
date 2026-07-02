@@ -1,7 +1,7 @@
 ---
 name: cursor-delegate
 description: Delegate repository coding work from Hermes to Cursor Cloud Agents
-version: 1.0.0
+version: 2.0.0
 metadata:
   hermes:
     requires:
@@ -19,6 +19,29 @@ Hermes remains the orchestrator; Cursor works asynchronously on GitHub repositor
 
 This skill applies when `PAPERCLIP_DELEGATION_MODE` is unset, `direct`, or any value other than `paperclip`.
 
+## Project coordination (read first)
+
+Prism Platform work is tracked in three places:
+
+| Layer | Location | Role |
+|-------|----------|------|
+| **Issues** | `prism-platform-ap/prism-platform` | System of record |
+| **Board** | [Prism Platform Sprint](https://github.com/orgs/prism-platform-ap/projects/1) | Visual sprint view |
+| **Notebook** | `prism-platform-ap/prism-playbook` → `TASK_NOTEBOOK.md` | Quick-read summary |
+
+Before every delegation:
+
+1. Read `TASK_NOTEBOOK.md` from `prism-playbook` for current slice, decisions, and blockers.
+2. Check open issues on the project board (or `gh issue list --repo prism-platform-ap/prism-platform --label slice-2`).
+3. Pick the **most specific open issue** (prefer sub-issues over epics).
+4. Include the issue number in the Cursor prompt (e.g. `Closes #8` or `Part of #7`).
+
+After delegation completes:
+
+1. Comment on the linked issue with the PR URL and a short summary.
+2. Update `TASK_NOTEBOOK.md` on significant milestones (slice complete, major decision, new blocker).
+3. Close sub-issues when acceptance criteria are met; close the epic when all children are done.
+
 ## When to delegate to Cursor
 
 Use `cursor_create_agent` when the user wants:
@@ -35,31 +58,43 @@ Stay in Hermes (do not delegate) for:
 
 ## Required workflow
 
-1. Clarify the **repository** (`owner/repo` or full GitHub URL). Use `cursor_list_repositories` if unsure.
-2. Write a crisp **objective** (short title) and a detailed **prompt** for Cursor.
-3. Include **acceptance_criteria** as a bullet list when the user gives requirements.
-4. Call `cursor_create_agent` with `auto_create_pr: true` unless the user says otherwise.
-5. Tell the user delegation started; share the local `task_id` and Cursor agent id when available.
-6. Poll progress with `cursor_get_agent` or `cursor_list_tasks` when the user asks for status.
-7. When finished, summarize **branch**, **PR URL**, and **summary**. Offer to review the diff with `gh` if available.
-8. If the result is insufficient, send a follow-up with `cursor_create_run`.
+1. **Context** — Read `TASK_NOTEBOOK.md` and find the relevant open issue(s).
+2. **Repository** — Default: `prism-platform-ap/prism-platform`. Use `cursor_list_repositories` if unsure.
+3. **Objective** — Short title matching the issue (e.g. `Slice 2.1: Invoice file picker UI`).
+4. **Prompt** — Detailed instructions for Cursor. Must include:
+   - Issue reference: `Related to prism-platform-ap/prism-platform#N`
+   - Link to notebook: `https://github.com/prism-platform-ap/prism-playbook/blob/main/TASK_NOTEBOOK.md`
+   - Relevant acceptance criteria from the issue body
+   - `Do not merge the PR.`
+5. **Acceptance criteria** — Copy from the issue as a bullet list.
+6. **Delegate** — Call `cursor_create_agent` with `auto_create_pr: true` unless the user says otherwise.
+7. **Report** — Tell the user delegation started; share `task_id` and Cursor agent id.
+8. **Poll** — Use `cursor_get_agent` or `cursor_list_tasks` when the user asks for status.
+9. **Close the loop** — When finished:
+   - Comment on the issue with PR link and summary (via GitHub MCP or `gh issue comment`)
+   - Summarize branch, PR URL, and changes for the user
+   - Update `TASK_NOTEBOOK.md` if milestone-worthy
+10. **Follow-up** — If insufficient, send `cursor_create_run` with issue context preserved.
 
 ## Hard rules
 
 - **Never merge pull requests.** The user must approve merges manually.
 - **Never delete repositories or force-push** via delegated agents unless the user explicitly requests it.
+- **Always reference an issue** when delegating Prism Platform work.
 - Prefer `cursor_cancel_agent` if the user asks to stop an in-flight delegation.
 - If `CURSOR_MAX_ACTIVE` is reached, tell the user to wait or cancel an existing task.
 
 ## Example user request
 
-> Fix invoice upload failures in christian/prism. Delegate to Cursor. Do not merge.
+> Delegate the invoice file picker for Slice 2 to Cursor. Do not merge.
 
 Actions:
 
-1. `cursor_create_agent` with objective, detailed prompt, acceptance criteria, repository `christian/prism`.
-2. Periodically `cursor_get_agent` / `cursor_poll_pending_tasks` until status is `finished` or `error`.
-3. Report PR link and summary; remind user to review before merging.
+1. Read `TASK_NOTEBOOK.md` — confirm Slice 2 is active.
+2. Find open sub-issue for file picker (e.g. `#8`).
+3. `cursor_create_agent` with objective `Slice 2.1: Invoice file picker UI`, prompt referencing `#8` and notebook URL, acceptance criteria from issue.
+4. Poll until `finished` or `error`.
+5. Comment on `#8` with PR link; update notebook if scope item completed.
 
 ## Environment
 
@@ -97,7 +132,7 @@ If new Cursor tools were added but do not appear:
 1. Confirm deploy: `grep cursor_list_models /data/.hermes/plugins/cursor-cloud/__init__.py` and `version: "1.1.0"` in `plugin.yaml`
 2. **Restart Hermes WebUI** (from `/tui`): `kill $(cat /data/.hermes/webui/server.pid)` — the entrypoint watchdog respawns it
 3. **Start a new WebUI chat session** — old sessions can retain stale tool metadata
-4. Ensure session toolsets include **`cursor_cloud`** (session settings 🔧 or `/toolsets`)
+4. Ensure session toolsets include **`cursor_cloud`** (session settings or `/toolsets`)
 5. Verify: `hermes plugins list` from `/tui` — `cursor-cloud` should be **enabled**
 
 ### Quick smoke test
