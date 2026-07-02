@@ -1,7 +1,0 @@
-name: paperclip
-version: "1.0.0"
-description: Delegate and track coding work via Paperclip work queue (Hermes → Paperclip → workers)
-requires_env:
-  - PAPERCLIP_API_TOKEN
-  - PAPERCLIP_BASE_URL
-  - PAPERCLIP_COMPANY_ID

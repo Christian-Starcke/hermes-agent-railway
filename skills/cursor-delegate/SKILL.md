@@ -12,12 +12,8 @@ metadata:
 
 # Cursor Cloud Agent Delegation
 
-> **Delegation mode:** If `PAPERCLIP_DELEGATION_MODE=paperclip`, use the **`paperclip-delegate`** skill and `paperclip_delegate_coding_task` instead. Do not call `cursor_create_agent` in Paperclip mode.
-
-You can delegate implementation work to **Cursor Cloud Agents** using the `cursor_cloud` toolset (direct Hermes → Cursor path).
+You can delegate implementation work to **Cursor Cloud Agents** using the `cursor_cloud` toolset.
 Hermes remains the orchestrator; Cursor works asynchronously on GitHub repositories.
-
-This skill applies when `PAPERCLIP_DELEGATION_MODE` is unset, `direct`, or any value other than `paperclip`.
 
 ## Project coordination (read first)
 

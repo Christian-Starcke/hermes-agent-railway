@@ -328,13 +328,12 @@ if [ -d "/opt/hermes-railway/plugins" ]; then
 fi
 
 # Log plugin versions after sync (helps verify deploys).
-for _plugin_name in "cursor-cloud" "paperclip"; do
-  if [ -f "${HERMES_HOME}/.hermes/plugins/${_plugin_name}/plugin.yaml" ]; then
-    python3 - <<PY || true
+if [ -f "${HERMES_HOME}/.hermes/plugins/cursor-cloud/plugin.yaml" ]; then
+  python3 - <<'PY' || true
 import re
 from pathlib import Path
 
-plugin_name = "${_plugin_name}"
+plugin_name = "cursor-cloud"
 plugin_dir = Path("/data/.hermes/plugins") / plugin_name
 yaml_text = (plugin_dir / "plugin.yaml").read_text(encoding="utf-8")
 init_text = (plugin_dir / "__init__.py").read_text(encoding="utf-8")
@@ -343,12 +342,10 @@ for line in yaml_text.splitlines():
     if line.strip().startswith("version:"):
         version = line.split(":", 1)[1].strip().strip('"').strip("'")
         break
-prefix = "cursor_" if plugin_name == "cursor-cloud" else "paperclip_"
-tools = sorted(set(re.findall(rf'"{prefix}[a-z_]+"', init_text)))
+tools = sorted(set(re.findall(r'"cursor_[a-z_]+"', init_text)))
 print(f"[entrypoint] {plugin_name} plugin version={version} tools_registered={len(tools)}")
 PY
-  fi
-done
+fi
 
 # Default webhook URL for Cursor delegations when running on Railway.
 if [ -z "${CURSOR_WEBHOOK_URL:-}" ] && [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
@@ -370,8 +367,6 @@ if cfg_path.exists():
     except Exception:
         cfg = {}
 
-delegation_mode = (os.environ.get("PAPERCLIP_DELEGATION_MODE") or "direct").strip().lower()
-paperclip_configured = bool((os.environ.get("PAPERCLIP_API_TOKEN") or "").strip())
 cursor_configured = bool((os.environ.get("CURSOR_API_KEY") or "").strip())
 
 plugins = cfg.setdefault("plugins", {})
@@ -379,26 +374,17 @@ enabled = plugins.setdefault("enabled", [])
 toolsets = cfg.setdefault("toolsets", [])
 changed = False
 
-if paperclip_configured and "paperclip" not in enabled:
-    enabled.append("paperclip")
+if "paperclip" in enabled:
+    enabled.remove("paperclip")
     changed = True
-    print("[entrypoint] enabled paperclip plugin in config.yaml")
+    print("[entrypoint] removed stale paperclip plugin from config.yaml")
 
-if paperclip_configured and "paperclip" not in toolsets:
-    toolsets.append("paperclip")
+if "paperclip" in toolsets:
+    toolsets.remove("paperclip")
     changed = True
-    print("[entrypoint] enabled paperclip toolset in config.yaml")
+    print("[entrypoint] removed stale paperclip toolset from config.yaml")
 
-if delegation_mode == "paperclip":
-    if "cursor-cloud" in enabled:
-        enabled.remove("cursor-cloud")
-        changed = True
-        print("[entrypoint] disabled cursor-cloud plugin (PAPERCLIP_DELEGATION_MODE=paperclip)")
-    if "cursor_cloud" in toolsets:
-        toolsets.remove("cursor_cloud")
-        changed = True
-        print("[entrypoint] disabled cursor_cloud toolset (PAPERCLIP_DELEGATION_MODE=paperclip)")
-elif cursor_configured:
+if cursor_configured:
     if "cursor-cloud" not in enabled:
         enabled.append("cursor-cloud")
         changed = True
