@@ -82,6 +82,7 @@ RUN uv pip install --python /opt/hermes/.venv/bin/python --no-cache-dir \
 WORKDIR /opt/hermes-railway
 
 COPY admin ./admin
+COPY plugins ./plugins
 COPY skills ./skills
 COPY entrypoint.sh ./entrypoint.sh
 
