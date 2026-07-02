@@ -81,10 +81,15 @@ Actions:
 
 Hermes loads plugins at **process startup**. Plugin source on disk is synced from the Docker image on every container boot.
 
-With many MCP servers attached, Hermes may **defer** plugin tools behind `tool_search` / `tool_describe` / `tool_call`. That is normal for `paperclip_*` tools.
+The `paperclip_*` tools are **native plugin tools** in the **`paperclip` toolset** — not MCP deferred tools. Do **not** use `tool_search` for them.
+
+When `PAPERCLIP_API_TOKEN` is set, Railway `entrypoint.sh` enables both:
+
+- `plugins.enabled: [paperclip, ...]`
+- `toolsets: [..., paperclip]`
+
+Toolset changes apply on a **new WebUI session** (`/reset` or fresh chat). They do not appear mid-conversation.
 
 ### Quick smoke test
 
-Ask the user to run in a **new session**:
-
-> Use `tool_search` to find `paperclip_health`, then `tool_call` it. Report whether Paperclip is reachable.
+In a **new session**, call `paperclip_health` directly (or `paperclip_list_agents`). Report whether Paperclip is reachable.

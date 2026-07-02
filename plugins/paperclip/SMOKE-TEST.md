@@ -35,7 +35,7 @@ python3 /data/.hermes/plugins/paperclip/smoke_test_local.py
 ## 4. Hermes WebUI chat E2E
 
 1. Set `PAPERCLIP_DELEGATION_MODE=paperclip` on Hermes and redeploy.
-2. Start a **new** WebUI session with `paperclip` toolset enabled.
+2. Start a **new** WebUI session (entrypoint enables the `paperclip` toolset when `PAPERCLIP_API_TOKEN` is set).
 3. Prompt:
 
    > Delegate a trivial doc fix in `owner/repo` via Paperclip. Do not merge.
