@@ -1,7 +1,7 @@
 ---
 name: cursor-delegate
 description: Delegate repository coding work from Hermes to Cursor Cloud Agents
-version: 2.0.0
+version: 2.1.0
 metadata:
   hermes:
     requires:
@@ -14,6 +14,17 @@ metadata:
 
 You can delegate implementation work to **Cursor Cloud Agents** using the `cursor_cloud` toolset.
 Hermes remains the orchestrator; Cursor works asynchronously on GitHub repositories.
+
+## Parallel delegate workers (Cursor and OpenCode)
+
+**Cursor Cloud Agents** (`cursor_cloud`) and **OpenCode** (`opencode_delegate`) are parallel coding delegates. Treat them as equivalent for repo work — same coordination workflow, same hard rules (no auto-merge, issue references, notebook updates).
+
+| Delegate | Tool | Where it runs |
+|----------|------|----------------|
+| Cursor | `cursor_create_agent` | Cursor Cloud on GitHub repos |
+| OpenCode | `opencode_create_task` | Railway OpenCode server (`/data/workspace` clones) |
+
+If the user names a delegate, use that one. If they say "delegate this" without specifying, pick either based on availability (`CURSOR_MAX_ACTIVE`, `OPENCODE_MAX_ACTIVE`) or ask once. Do not favor one delegate for certain repos or task types.
 
 ## Project coordination (read first)
 

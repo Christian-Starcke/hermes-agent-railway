@@ -1,7 +1,7 @@
 ---
 name: opencode-delegate
 description: Delegate coding work from Hermes to OpenCode on Railway
-version: 1.0.0
+version: 1.1.0
 metadata:
   hermes:
     requires:
@@ -16,15 +16,16 @@ metadata:
 You can delegate implementation work to **OpenCode** on Railway using the `opencode_delegate` toolset.
 Hermes remains the orchestrator; OpenCode runs asynchronously on the Railway-hosted coding server.
 
-## OpenCode vs Cursor
+## Parallel delegate workers (OpenCode and Cursor)
 
-| Use **OpenCode** (`opencode_create_task`) | Use **Cursor** (`cursor_create_agent`) |
-|-------------------------------------------|----------------------------------------|
-| n8n workflow edits, Railway ops, infra scripts | GitHub repo feature work with branch + PR |
-| Fast iteration on repos under `/data/workspace` | Cloud-isolated repo agents with Cursor's native PR flow |
-| Shell/file tools in persistent OpenCode volume | Tasks where Cursor's GitHub integration is preferred |
+**OpenCode** (`opencode_delegate`) and **Cursor Cloud Agents** (`cursor_cloud`) are parallel coding delegates. Treat them as equivalent for repo work — same coordination workflow, same hard rules (no auto-merge, issue references, notebook updates).
 
-When unsure, prefer **Cursor** for user-facing product code in `prism-platform` and **OpenCode** for automation/ops repos (`n8n-as-code`, playbook scripts).
+| Delegate | Tool | Where it runs |
+|----------|------|----------------|
+| OpenCode | `opencode_create_task` | Railway OpenCode server (`/data/workspace` clones) |
+| Cursor | `cursor_create_agent` | Cursor Cloud on GitHub repos |
+
+If the user names a delegate, use that one. If they say "delegate this" without specifying, pick either based on availability (`OPENCODE_MAX_ACTIVE`, `CURSOR_MAX_ACTIVE`) or ask once. Do not favor one delegate for certain repos or task types.
 
 ## Project coordination (read first)
 
