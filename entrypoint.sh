@@ -38,6 +38,17 @@ if [ "$(id -u)" = "0" ]; then
   chown -R hermes:hermes "${HERMES_HOME}" 2>/dev/null || true
 fi
 
+# Prism org workspace: n8n-as-code at root + prism-platform-ap/* sibling repos.
+if [ "${WORKSPACE_BOOTSTRAP:-}" = "true" ] || [ -n "${GIT_REPO_N8N:-}" ]; then
+  export WORKSPACE_ROOT="${HERMES_HOME}/home/workspace"
+  export WORKSPACE_BOOTSTRAP="${WORKSPACE_BOOTSTRAP:-true}"
+  export WORKSPACE_BOOTSTRAP_PREFIX="[hermes-bootstrap]"
+  if [ -f "/opt/hermes-railway/scripts/prism-workspace-bootstrap.sh" ]; then
+    bash /opt/hermes-railway/scripts/prism-workspace-bootstrap.sh || \
+      echo "[entrypoint] prism workspace bootstrap failed (non-fatal)"
+  fi
+fi
+
 # Railway ops baseline: deep-merge HERMES_CONFIG_B64 into /data/config.yaml on
 # every boot so model/agent/MCP/auxiliary settings survive redeploys. Volume
 # keys not present in the overlay are preserved; overlay wins on conflicts.

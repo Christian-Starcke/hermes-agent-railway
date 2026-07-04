@@ -51,7 +51,7 @@ After delegation completes:
 ## Required workflow
 
 1. **Context** — Read `TASK_NOTEBOOK.md` and find relevant open issue(s) when applicable.
-2. **Workspace** — Set `workspace_hint` to the repo folder under `/data/workspace` (e.g. `n8n-as-code`, `prism-platform`).
+2. **Workspace** — Set `workspace_hint` to a path under `/data/workspace` (e.g. `prism-platform-ap/prism-platform`, `prism-platform-ap/n8n-as-code`, or `workflows` at workspace root for n8n).
 3. **Objective** — Short title matching the task.
 4. **Prompt** — Detailed instructions. Must include:
    - Issue reference when applicable
