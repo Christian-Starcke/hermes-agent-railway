@@ -36,7 +36,31 @@ OpenCode uses the same connections-hub MCP arsenal as Hermes and code-server-ide
 
 Template source: [`operations/connections-hub/config/opencode/`](https://github.com/prism-platform-ap/prism-playbook/tree/main/operations/connections-hub/config/opencode)
 
-## Bootstrap
+## Version upgrades (auto on new release)
+
+OpenCode **core + web UI are baked into the Docker image** at build time (`SOURCE_MODE=true`, `OPENCODE_REF=<git tag>`). Restarting the container or editing runtime env vars does **not** upgrade the UI — Railway must **rebuild** with a newer `OPENCODE_REF`.
+
+| What | Auto-updates? |
+|------|----------------|
+| OpenCode CLI + web UI | No — requires `OPENCODE_REF` change + image rebuild |
+| MCP config / API keys | Yes — via `sync-railway.*` (`OPENCODE_CONFIG_CONTENT` + env vars) |
+| Workspace, MCP OAuth, `/data` volume | Persists across version upgrades |
+
+**Automatic:** [prism-playbook `opencode-release-check` workflow](https://github.com/prism-platform-ap/prism-playbook/blob/main/.github/workflows/opencode-release-check.yml) polls GitHub every 6 hours; redeploys only when `anomalyco/opencode` has a newer release tag. Set `RAILWAY_API_TOKEN` in prism-playbook Actions secrets.
+
+**Manual (local):**
+
+```powershell
+cd prism-playbook/operations/connections-hub
+.\scripts\check-opencode-release.ps1
+.\scripts\check-opencode-release.ps1 -DryRun
+.\scripts\check-opencode-release.ps1 -Force v1.17.13
+```
+
+**Verify after upgrade:** `python opencode-railway/verify-mcp-hub.py` (12 MCPs) + OpenCode UI loads.
+
+**Note:** Large version jumps with 12 MCPs can exceed the LaceLetho wrapper's 30s startup health timeout. If a deploy shows `502` / `OpenCode failed to start within timeout`, roll back with `-Force v1.14.41` or wait for a LaceLetho template update. The release-check workflow only upgrades when the GitHub tag is newer — it does not auto-rollback.
+
 
 **Automatic (OpenCode start command):**
 
@@ -89,6 +113,7 @@ Set on **hermes-agent** (see connections-hub `sync-railway.*`):
 Set on **opencode** service (via `sync-railway.*`):
 
 - `OPENCODE_CONFIG_CONTENT` — full MCP + model config (from `render-opencode.*`)
+- `OPENCODE_REF` — git tag built into image (e.g. `v1.17.13`); see Version upgrades above
 - `COMMON_VARS` keys: `FIRECRAWL_API_KEY`, `OPENROUTER_API_KEY`, `RETELL_API_KEY`, `RESEND_API_KEY`, `SUPABASE_PAT`, `GITHUB_TOKEN`, `N8N_*`, `RAILWAY_API_TOKEN`, `SENTRY_ACCESS_TOKEN`, `BETTERSTACK_API_TOKEN`, `POSTHOG_PERSONAL_API_KEY`
 - `OPENCODE_SERVER_PASSWORD`
 - `OPENCODE_MODEL`
