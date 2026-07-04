@@ -1,0 +1,6 @@
+name: opencode-delegate
+version: "1.0.0"
+description: Delegate coding tasks to OpenCode on Railway from Hermes
+requires_env:
+  - OPENCODE_SERVER_URL
+  - OPENCODE_SERVER_PASSWORD
