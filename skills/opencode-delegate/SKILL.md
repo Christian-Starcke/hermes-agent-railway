@@ -22,8 +22,17 @@ Hermes remains the orchestrator; OpenCode runs asynchronously on the Railway-hos
 
 | Delegate | Tool | Where it runs |
 |----------|------|----------------|
-| OpenCode | `opencode_create_task` | Railway OpenCode server (`/data/workspace` clones) |
+| OpenCode | `opencode_create_task` | Co-located `opencode serve` on Hermes (default `http://127.0.0.1:9130`) or remote Railway service |
 | Cursor | `cursor_create_agent` | Cursor Cloud on GitHub repos |
+
+## Workspace-aware delegation
+
+When a **Hermes workspace** is active (`/data/current_workspace.id` or `workspace-orchestrator` skill):
+
+1. Set `workspace_hint` to the absolute **worktree path** from `workspaces.db`.
+2. Pass `workspace_id` in delegation context so tasks link to the workspace row.
+3. Co-located OpenCode shares Hermes files — no separate clone sync needed.
+4. Use `POST /api/workspaces/{id}/delegate` with `backend: opencode` from the `/workspaces` UI.
 
 If the user names a delegate, use that one. If they say "delegate this" without specifying, pick either based on availability (`OPENCODE_MAX_ACTIVE`, `CURSOR_MAX_ACTIVE`) or ask once. Do not favor one delegate for certain repos or task types.
 

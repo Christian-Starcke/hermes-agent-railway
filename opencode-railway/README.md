@@ -1,6 +1,24 @@
 # OpenCode on Railway (Hermes Agent project)
 
-OpenCode runs as a separate Railway service in the Hermes Agent project. Hermes delegates work via the `opencode-delegate` plugin.
+OpenCode can run in two modes:
+
+1. **Co-located (recommended)** — `opencode serve` loopback inside the **hermes-agent** container (`OPENCODE_COLOCATE=true`, default). Shares `/data/home/workspace` and git worktrees with Hermes. `OPENCODE_SERVER_URL` defaults to `http://127.0.0.1:9130`.
+2. **Remote service** — separate Railway **opencode** service with its own `/data/workspace` volume. Set `OPENCODE_SERVER_URL` to the public URL and `OPENCODE_COLOCATE=false` on hermes-agent to skip local serve.
+
+> **Not Crush:** This stack uses [opencode.ai](https://opencode.ai) (SST/anomalyco). The archived `opencode-ai/opencode` → Crush project has an incompatible API.
+
+Hermes delegates work via the `opencode-delegate` plugin.
+
+## Co-location env vars (hermes-agent)
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `OPENCODE_COLOCATE` | `true` | Start `opencode serve` on boot |
+| `OPENCODE_LOCAL_PORT` | `9130` | Loopback port |
+| `OPENCODE_PREFER_LOCAL` | `true` | Use local URL even if remote URL was set |
+| `OPENCODE_SERVER_PASSWORD` | — | HTTP basic auth (required) |
+| `OPENCODE_CONFIG_CONTENT` | — | Written to `/data/opencode.json` |
+| `OPENCODE_WORKSPACE` | `/data/home/workspace` | Default project root |
 
 ## Workspace layout (matches Hermes WebUI)
 

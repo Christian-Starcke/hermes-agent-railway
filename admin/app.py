@@ -34,42 +34,25 @@ from starlette.routing import Mount, Route, WebSocketRoute
 
 from . import proxy as hermes_proxy
 from . import terminal as hermes_terminal
+from .auth import is_authenticated
+from .cursor_webhook import cursor_webhook
 from .dashboard_proxy import DASHBOARD_MOUNT_PREFIX, build_dashboard_starlette_app
+from .workspace_routes import workspace_routes
 
 
 TEMPLATE_PATH = Path(__file__).parent / "templates" / "tui.html"
 
 
-async def _is_authenticated(request: Request) -> bool:
-    """Cheap auth probe: hit hermes-webui's /api/onboarding/status with the user's cookies.
-
-    First call after boot can be slow (5+s) due to hermes_cli imports inside the
-    webui server. Use a generous timeout — auth checks are infrequent.
-    """
-    import httpx
-
-    cookie = request.headers.get("cookie", "")
-    if not cookie:
-        return False
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.get(
-                f"{hermes_proxy.WEBUI_BASE_URL}/api/onboarding/status",
-                headers={"cookie": cookie, "host": f"{hermes_proxy.WEBUI_HOST}:{hermes_proxy.WEBUI_PORT}"},
-            )
-        return r.status_code == 200
-    except (httpx.ConnectError, httpx.ReadTimeout):
-        return False
-
-
 async def tui_page(request: Request):
-    if not await _is_authenticated(request):
+    if not await is_authenticated(request):
         return RedirectResponse("/login?next=/tui", status_code=303)
     return HTMLResponse(TEMPLATE_PATH.read_text(encoding="utf-8"))
 
 
 routes = [
     Route("/tui", tui_page, methods=["GET"]),
+    Route("/webhooks/cursor", cursor_webhook, methods=["POST"]),
+    *workspace_routes(),
     WebSocketRoute("/tui/ws/auth/{provider}", hermes_terminal.login_ws),
     WebSocketRoute("/tui/ws/shell", hermes_terminal.shell_ws),
     Mount(DASHBOARD_MOUNT_PREFIX, build_dashboard_starlette_app()),

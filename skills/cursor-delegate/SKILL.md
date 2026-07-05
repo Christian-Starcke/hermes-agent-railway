@@ -22,7 +22,16 @@ Hermes remains the orchestrator; Cursor works asynchronously on GitHub repositor
 | Delegate | Tool | Where it runs |
 |----------|------|----------------|
 | Cursor | `cursor_create_agent` | Cursor Cloud on GitHub repos |
-| OpenCode | `opencode_create_task` | Railway OpenCode server (`/data/workspace` clones) |
+| OpenCode | `opencode_create_task` | Co-located `opencode serve` on Hermes (default) or remote Railway service |
+
+## Workspace-aware delegation
+
+When a **Hermes workspace** is active (`/data/current_workspace.id` or `workspace-orchestrator` skill):
+
+1. Prefer `base_ref` = workspace branch for `cursor_create_agent` (not `main`).
+2. Pass `workspace_id` when delegating so `cursor_tasks.workspace_id` links to `workspaces.db`.
+3. For OpenCode, set `workspace_hint` to the absolute **worktree path** (not a relative subpath).
+4. Use `POST /api/workspaces/{id}/delegate` or `/workspaces` UI when the user wants one-click routing.
 
 If the user names a delegate, use that one. If they say "delegate this" without specifying, pick either based on availability (`CURSOR_MAX_ACTIVE`, `OPENCODE_MAX_ACTIVE`) or ask once. Do not favor one delegate for certain repos or task types.
 

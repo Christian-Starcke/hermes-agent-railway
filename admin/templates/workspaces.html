@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hermes — Workspaces</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html@3.4.47/bundles/css/diff2html.min.css">
+    <link rel="stylesheet" href="/static/workspaces.css">
+  </head>
+  <body>
+    <div class="shell">
+      <nav class="topnav"><a href="/">← Chat</a> · <a href="/tui">Terminal</a></nav>
+      <h1>Workspaces</h1>
+      <p class="lead">Git worktree isolation — create a branch, activate, chat with Hermes, review diffs, open PRs.</p>
+
+      <div class="layout">
+        <aside class="sidebar" id="sidebar">
+          <button type="button" class="primary" id="btn-new">+ New workspace</button>
+          <div id="workspace-list"></div>
+        </aside>
+
+        <main class="main">
+          <div id="empty-state" class="empty">Select or create a workspace.</div>
+          <div id="detail" class="detail hidden">
+            <header class="detail-header">
+              <div>
+                <h2 id="ws-name"></h2>
+                <p class="meta" id="ws-meta"></p>
+              </div>
+              <div class="actions">
+                <select id="ws-backend" aria-label="Agent backend">
+                  <option value="hermes">Hermes</option>
+                  <option value="opencode">OpenCode</option>
+                  <option value="cursor">Cursor Cloud</option>
+                </select>
+                <button type="button" id="btn-activate">Activate</button>
+                <button type="button" id="btn-chat">Open chat</button>
+                <button type="button" id="btn-pr">Create PR</button>
+                <button type="button" id="btn-archive" class="danger">Archive</button>
+              </div>
+            </header>
+            <div id="diff-container" class="diff-container"></div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="create-dialog">
+      <form method="dialog" id="create-form">
+        <h3>New workspace</h3>
+        <label>Name <input name="name" required placeholder="Fix invoice workflow"></label>
+        <label>Repo root
+          <select name="repo_root">
+            <option value=".">. (n8n-as-code root)</option>
+            <option value="prism-platform-ap/prism-platform">prism-platform-ap/prism-platform</option>
+            <option value="prism-platform-ap/n8n-as-code">prism-platform-ap/n8n-as-code</option>
+            <option value="prism-platform-ap/prism-playbook">prism-platform-ap/prism-playbook</option>
+          </select>
+        </label>
+        <label>Base ref <input name="base_ref" value="main"></label>
+        <label>Issue URL <input name="issue_url" placeholder="https://github.com/.../issues/42"></label>
+        <label class="checkbox"><input type="checkbox" name="activate" checked> Activate after create</label>
+        <div class="dialog-actions">
+          <button type="button" id="create-cancel">Cancel</button>
+          <button type="submit" class="primary">Create</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.47/bundles/js/diff2html.min.js"></script>
+    <script src="/static/workspaces.js"></script>
+  </body>
+</html>

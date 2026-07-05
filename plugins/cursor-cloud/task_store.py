@@ -17,6 +17,7 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS cursor_tasks (
   id TEXT PRIMARY KEY,
   hermes_session_id TEXT,
+  workspace_id TEXT,
   objective TEXT NOT NULL,
   repository TEXT NOT NULL,
   base_ref TEXT DEFAULT 'main',
@@ -63,6 +64,12 @@ class TaskStore:
     def _init_db(self) -> None:
         with self._db() as conn:
             conn.executescript(_SCHEMA)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(cursor_tasks)").fetchall()}
+            if "workspace_id" not in columns:
+                conn.execute("ALTER TABLE cursor_tasks ADD COLUMN workspace_id TEXT")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cursor_tasks_workspace ON cursor_tasks(workspace_id)"
+            )
 
     def create_task(
         self,
@@ -71,6 +78,7 @@ class TaskStore:
         repository: str,
         base_ref: str = "main",
         hermes_session_id: str | None = None,
+        workspace_id: str | None = None,
         acceptance_criteria: list[str] | None = None,
         status: str = "pending",
     ) -> dict[str, Any]:
@@ -81,13 +89,14 @@ class TaskStore:
             conn.execute(
                 """
                 INSERT INTO cursor_tasks (
-                  id, hermes_session_id, objective, repository, base_ref,
+                  id, hermes_session_id, workspace_id, objective, repository, base_ref,
                   status, acceptance_criteria, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
                     hermes_session_id,
+                    workspace_id,
                     objective,
                     repository,
                     base_ref,

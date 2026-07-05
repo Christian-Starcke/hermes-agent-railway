@@ -114,6 +114,7 @@ def handle_create_agent(params: dict[str, Any], **kwargs: Any) -> str:
             repository=repo_url,
             base_ref=base_ref,
             hermes_session_id=_session_id(kwargs),
+            workspace_id=str(kwargs.get("workspace_id")).strip() if kwargs.get("workspace_id") else None,
             acceptance_criteria=criteria,
             status="pending",
         )
@@ -149,6 +150,24 @@ def handle_create_agent(params: dict[str, Any], **kwargs: Any) -> str:
             status=mapped if mapped != "pending" else "running",
         )
         refreshed = sync_task_from_run(store.get_task(task["id"]) or {}, client=client, store=store)
+        workspace_id = kwargs.get("workspace_id")
+        if workspace_id and refreshed:
+            try:
+                import sys
+                from pathlib import Path
+
+                railway_root = Path("/opt/hermes-railway")
+                if railway_root.is_dir() and str(railway_root) not in sys.path:
+                    sys.path.insert(0, str(railway_root))
+                from admin.workspace_store import WorkspaceStore
+
+                WorkspaceStore().update_workspace(
+                    str(workspace_id),
+                    cursor_task_id=refreshed.get("id"),
+                    status="busy",
+                )
+            except Exception:
+                pass
         return json.dumps(
             {
                 "success": True,
