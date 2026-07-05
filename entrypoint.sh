@@ -453,6 +453,7 @@ python3 /data/.hermes/plugins/cursor-cloud/poll_pending.py >> /data/logs/cursor-
 POLL
   chmod +x "${CURSOR_POLL_SCRIPT}"
   echo "Installed Cursor poll script at ${CURSOR_POLL_SCRIPT}"
+  echo "Add a Hermes cron job (every 10m) that runs: ${CURSOR_POLL_SCRIPT}"
 fi
 
 OPENCODE_POLL_SCRIPT="${HERMES_HOME}/cron/opencode-delegate-poll.sh"
@@ -466,49 +467,7 @@ python3 /data/.hermes/plugins/opencode-delegate/poll_pending.py >> /data/logs/op
 POLL
   chmod +x "${OPENCODE_POLL_SCRIPT}"
   echo "Installed OpenCode poll script at ${OPENCODE_POLL_SCRIPT}"
-fi
-
-# Initialize workspace SQLite schema and prune stale git worktrees.
-python3 - <<'PY' || true
-import os
-import sys
-sys.path.insert(0, "/opt/hermes-railway")
-from admin.workspace_store import WorkspaceStore
-from admin.workspace_manager import prune_orphan_worktrees_on_boot
-WorkspaceStore()
-prune_orphan_worktrees_on_boot()
-print("[entrypoint] workspaces.db ready")
-PY
-
-# Auto-run delegation poll loop (Cursor + OpenCode) unless disabled.
-if [ "${DELEGATION_POLL_AUTO:-true}" = "true" ]; then
-  DELEGATION_POLL_LOG="${HERMES_HOME}/logs/delegation-poll-loop.log"
-  if [ -f "/opt/hermes-railway/scripts/delegation-poll-loop.sh" ]; then
-    chmod +x /opt/hermes-railway/scripts/delegation-poll-loop.sh 2>/dev/null || true
-    bash /opt/hermes-railway/scripts/delegation-poll-loop.sh >> "${DELEGATION_POLL_LOG}" 2>&1 &
-    echo "Started delegation poll loop (interval ${DELEGATION_POLL_INTERVAL_SEC:-600}s)"
-  fi
-fi
-
-# Co-located opencode.ai server (SST project — NOT archived opencode-ai/Crush).
-if [ "${OPENCODE_COLOCATE:-true}" = "true" ] && command -v opencode >/dev/null 2>&1; then
-  OPENCODE_LOCAL_PORT="${OPENCODE_LOCAL_PORT:-9130}"
-  if [ -z "${OPENCODE_SERVER_URL:-}" ] || [ "${OPENCODE_PREFER_LOCAL:-true}" = "true" ]; then
-    export OPENCODE_SERVER_URL="http://127.0.0.1:${OPENCODE_LOCAL_PORT}"
-  fi
-  export OPENCODE_WORKSPACE="${OPENCODE_WORKSPACE:-${HERMES_HOME}/home/workspace}"
-  if [ -n "${OPENCODE_CONFIG_CONTENT:-}" ]; then
-    printf '%s' "${OPENCODE_CONFIG_CONTENT}" > "${HERMES_HOME}/opencode.json"
-    export OPENCODE_CONFIG="${HERMES_HOME}/opencode.json"
-  fi
-  OPENCODE_SERVE_LOG="${HERMES_HOME}/logs/opencode-serve.log"
-  echo "Starting co-located opencode serve on 127.0.0.1:${OPENCODE_LOCAL_PORT}..."
-  OPENCODE_SERVER_PASSWORD="${OPENCODE_SERVER_PASSWORD:-}" \
-  OPENCODE_SERVER_USERNAME="${OPENCODE_SERVER_USER:-opencode}" \
-  opencode serve --hostname 127.0.0.1 --port "${OPENCODE_LOCAL_PORT}" >> "${OPENCODE_SERVE_LOG}" 2>&1 &
-  echo "OpenCode serve PID: $! (logs at ${OPENCODE_SERVE_LOG})"
-elif [ "${OPENCODE_COLOCATE:-true}" = "true" ]; then
-  echo "[entrypoint] opencode binary not found; using remote OPENCODE_SERVER_URL if set"
+  echo "Add a Hermes cron job (every 10m) that runs: ${OPENCODE_POLL_SCRIPT}"
 fi
 
 if [ -z "${ADMIN_PASSWORD:-}" ]; then

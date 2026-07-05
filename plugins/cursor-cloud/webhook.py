@@ -55,33 +55,7 @@ def apply_webhook_payload(payload: dict[str, Any], *, store: TaskStore | None = 
         "webhook_id": payload.get("id") or task.get("webhook_id"),
     }
     updated = store.update_task(task["id"], **updates)
-
-    workspace_synced = None
-    try:
-        import sys
-        from pathlib import Path
-
-        railway_admin = Path("/opt/hermes-railway/admin")
-        if railway_admin.is_dir() and str(railway_admin.parent) not in sys.path:
-            sys.path.insert(0, str(railway_admin.parent))
-        from admin.workspace_manager import sync_workspace_from_cursor_task
-
-        workspace_synced = sync_workspace_from_cursor_task(
-            updated or task,
-            mapped_status=mapped,
-            pr_url=updates.get("pr_url"),
-            branch_name=updates.get("branch_name"),
-        )
-    except Exception:
-        workspace_synced = None
-
-    return {
-        "success": True,
-        "task": updated,
-        "agent_id": agent_id,
-        "status": mapped,
-        "workspace": workspace_synced,
-    }
+    return {"success": True, "task": updated, "agent_id": agent_id, "status": mapped}
 
 
 def sync_task_from_run(
@@ -118,25 +92,7 @@ def sync_task_from_run(
         updates["branch_name"] = branch
     if pr_url:
         updates["pr_url"] = pr_url
-    refreshed = store.update_task(task["id"], **updates)
-    try:
-        import sys
-        from pathlib import Path
-
-        railway_admin = Path("/opt/hermes-railway/admin")
-        if railway_admin.is_dir() and str(railway_admin.parent) not in sys.path:
-            sys.path.insert(0, str(railway_admin.parent))
-        from admin.workspace_manager import sync_workspace_from_cursor_task
-
-        sync_workspace_from_cursor_task(
-            refreshed or task,
-            mapped_status=mapped,
-            pr_url=pr_url,
-            branch_name=branch,
-        )
-    except Exception:
-        pass
-    return refreshed
+    return store.update_task(task["id"], **updates)
 
 
 def poll_pending_tasks(*, store: TaskStore | None = None, client: CursorClient | None = None) -> dict[str, Any]:

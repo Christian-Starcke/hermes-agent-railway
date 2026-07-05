@@ -79,13 +79,6 @@ RUN set -eux; \
 RUN uv pip install --python /opt/hermes/.venv/bin/python --no-cache-dir \
     ptyprocess httpx websockets starlette uvicorn
 
-# opencode.ai CLI (SST/anomalyco — NOT archived opencode-ai/Crush). API matches opencode-delegate plugin.
-ARG OPENCODE_AI_VERSION
-RUN set -eux; \
-    OPENCODE_AI_VERSION="${OPENCODE_AI_VERSION:-$(python3 -c "import json; print(json.load(open('/tmp/versions.lock.json')).get('opencode_ai', 'latest'))")}"; \
-    npm install -g "opencode-ai@${OPENCODE_AI_VERSION}"; \
-    opencode --version || true
-
 WORKDIR /opt/hermes-railway
 
 COPY admin ./admin
@@ -97,11 +90,7 @@ COPY entrypoint.sh ./entrypoint.sh
 
 # Owned by `hermes` so `git fetch`/`hermes update` from the Web TUI do not trip
 # "detected dubious ownership" (repos owned by root, commands run as hermes).
-RUN chmod +x /opt/hermes-railway/entrypoint.sh \
-    /opt/hermes-railway/scripts/prism-workspace-bootstrap.sh \
-    /opt/hermes-railway/scripts/hermes-workspace.sh \
-    /opt/hermes-railway/scripts/delegation-poll-loop.sh \
-    /opt/hermes-railway/opencode-railway/workspace-bootstrap.sh && \
+RUN chmod +x /opt/hermes-railway/entrypoint.sh /opt/hermes-railway/scripts/prism-workspace-bootstrap.sh /opt/hermes-railway/opencode-railway/workspace-bootstrap.sh && \
     mkdir -p /data && \
     chown -R hermes:hermes \
       /opt/hermes \

@@ -19,7 +19,6 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS opencode_tasks (
   id TEXT PRIMARY KEY,
   hermes_session_id TEXT,
-  workspace_id TEXT,
   objective TEXT NOT NULL,
   workspace_hint TEXT,
   opencode_session_id TEXT,
@@ -63,12 +62,6 @@ class TaskStore:
     def _init_db(self) -> None:
         with self._db() as conn:
             conn.executescript(_SCHEMA)
-            columns = {row[1] for row in conn.execute("PRAGMA table_info(opencode_tasks)").fetchall()}
-            if "workspace_id" not in columns:
-                conn.execute("ALTER TABLE opencode_tasks ADD COLUMN workspace_id TEXT")
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_opencode_tasks_workspace ON opencode_tasks(workspace_id)"
-            )
 
     def create_task(
         self,
@@ -76,7 +69,6 @@ class TaskStore:
         objective: str,
         workspace_hint: str = "",
         hermes_session_id: str | None = None,
-        workspace_id: str | None = None,
         acceptance_criteria: list[str] | None = None,
         agent: str | None = None,
         model: str | None = None,
@@ -89,14 +81,13 @@ class TaskStore:
             conn.execute(
                 """
                 INSERT INTO opencode_tasks (
-                  id, hermes_session_id, workspace_id, objective, workspace_hint,
+                  id, hermes_session_id, objective, workspace_hint,
                   status, agent, model, acceptance_criteria, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     task_id,
                     hermes_session_id,
-                    workspace_id,
                     objective,
                     workspace_hint,
                     status,

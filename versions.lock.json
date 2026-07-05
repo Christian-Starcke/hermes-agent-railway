@@ -1,7 +1,6 @@
 {
   "hermes_webui": "v0.51.885",
   "hermes_agent": "v2026.7.1",
-  "opencode_ai": "latest",
   "updated_at": "2026-07-05T13:38:22Z",
-  "note": "Bumped by .github/workflows/upstream-release-watch.yml when nesquena/hermes-webui or NousResearch/hermes-agent publishes a new GitHub release. opencode_ai is the opencode.ai SST CLI (npm opencode-ai), NOT Crush."
+  "note": "Bumped by .github/workflows/upstream-release-watch.yml when nesquena/hermes-webui or NousResearch/hermes-agent publishes a new GitHub release."
 }
