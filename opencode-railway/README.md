@@ -20,7 +20,7 @@ On boot (or via one-shot bootstrap), repos clone into `/data/workspace`:
 
 ## MCP hub (13 servers)
 
-OpenCode uses the same connections-hub MCP arsenal as Hermes and code-server-ide. Config is rendered from `prism-playbook/operations/connections-hub/config/opencode/opencode.json.template` and synced via `sync-railway.*` as `OPENCODE_CONFIG_CONTENT`.
+OpenCode uses the same connections-hub MCP arsenal as Hermes and code-server-ide. Config is rendered from [`config/opencode/opencode.json.template`](https://github.com/Christian-Starcke/connections-hub/tree/master/config/opencode) in the standalone connections-hub repo and synced via `sync-railway.*` as `OPENCODE_CONFIG_CONTENT`.
 
 | Server | Type | Auth |
 |--------|------|------|
@@ -34,7 +34,7 @@ OpenCode uses the same connections-hub MCP arsenal as Hermes and code-server-ide
 
 **Railway MCP:** `@railway/cli` installs to `/data/.npm-global` on boot via `opencode-mcp-bootstrap.sh`. `RAILWAY_API_TOKEN` is synced from connections-hub; `PREPEND_PATH=/data/.npm-global/bin` puts `railway` on PATH.
 
-Template source: [`operations/connections-hub/config/opencode/`](https://github.com/prism-platform-ap/prism-playbook/tree/main/operations/connections-hub/config/opencode)
+Template source: [`connections-hub/config/opencode/`](https://github.com/Christian-Starcke/connections-hub/tree/master/config/opencode)
 
 ## Version upgrades (auto on new release)
 
@@ -46,12 +46,12 @@ OpenCode **core + web UI are baked into the Docker image** at build time (`SOURC
 | MCP config / API keys | Yes — via `sync-railway.*` (`OPENCODE_CONFIG_CONTENT` + env vars) |
 | Workspace, MCP OAuth, `/data` volume | Persists across version upgrades |
 
-**Automatic:** [prism-playbook `opencode-release-check` workflow](https://github.com/prism-platform-ap/prism-playbook/blob/main/.github/workflows/opencode-release-check.yml) polls GitHub every 6 hours; redeploys only when `anomalyco/opencode` has a newer release tag. Set `RAILWAY_API_TOKEN` in prism-playbook Actions secrets.
+**Automatic:** [connections-hub `opencode-release-check` workflow](https://github.com/Christian-Starcke/connections-hub/blob/master/.github/workflows/opencode-release-check.yml) polls GitHub every 6 hours; redeploys only when `anomalyco/opencode` has a newer release tag. Set `RAILWAY_API_TOKEN` in connections-hub Actions secrets.
 
 **Manual (local):**
 
 ```powershell
-cd prism-playbook/operations/connections-hub
+cd connections-hub
 .\scripts\check-opencode-release.ps1
 .\scripts\check-opencode-release.ps1 -DryRun
 .\scripts\check-opencode-release.ps1 -Force v1.17.13
