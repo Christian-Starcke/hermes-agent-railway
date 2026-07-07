@@ -18,17 +18,17 @@ On boot (or via one-shot bootstrap), repos clone into `/data/workspace`:
   gtm-dashboard/                             ← symlink when apps/gtm-dashboard exists
 ```
 
-## MCP hub (12 servers)
+## MCP hub (13 servers)
 
 OpenCode uses the same connections-hub MCP arsenal as Hermes and code-server-ide. Config is rendered from `prism-playbook/operations/connections-hub/config/opencode/opencode.json.template` and synced via `sync-railway.*` as `OPENCODE_CONFIG_CONTENT`.
 
 | Server | Type | Auth |
 |--------|------|------|
-| github, firecrawl, railway, retellai, supabase, resend, n8nac, sentry | local (`npx` / `railway mcp`) | Railway env vars (`{env:VAR}` in config) |
+| github, firecrawl, searxng, railway, retellai, supabase, resend, n8nac, sentry | local (`npx` / `railway mcp`) | Railway env vars (`{env:VAR}` in config) |
 | openrouter, better_stack, posthog | remote | Bearer header from env |
 | vercel | remote | OAuth (one-time in OpenCode UI) |
 
-**Verify:** in OpenCode shell or session: `opencode mcp list` — should show 12 enabled servers.
+**Verify:** in OpenCode shell or session: `opencode mcp list` — should show 13 enabled servers.
 
 **Vercel (one-time):** `opencode mcp auth vercel` or complete OAuth in Settings → MCP. Token persists at `/data/.local/share/opencode/mcp-auth.json`.
 
@@ -57,9 +57,9 @@ cd prism-playbook/operations/connections-hub
 .\scripts\check-opencode-release.ps1 -Force v1.17.13
 ```
 
-**Verify after upgrade:** `python opencode-railway/verify-mcp-hub.py` (12 MCPs) + OpenCode UI loads.
+**Verify after upgrade:** `python opencode-railway/verify-mcp-hub.py` (13 MCPs) + OpenCode UI loads.
 
-**Note:** Large version jumps with 12 MCPs can exceed the LaceLetho wrapper's 30s startup health timeout. If a deploy shows `502` / `OpenCode failed to start within timeout`, roll back with `-Force v1.14.41` or wait for a LaceLetho template update. The release-check workflow only upgrades when the GitHub tag is newer — it does not auto-rollback.
+**Note:** Large version jumps with 13 MCPs can exceed the LaceLetho wrapper's 30s startup health timeout. If a deploy shows `502` / `OpenCode failed to start within timeout`, roll back with `-Force v1.14.41` or wait for a LaceLetho template update. The release-check workflow only upgrades when the GitHub tag is newer — it does not auto-rollback.
 
 
 **Automatic (OpenCode start command):**
@@ -115,6 +115,7 @@ Set on **opencode** service (via `sync-railway.*`):
 - `OPENCODE_CONFIG_CONTENT` — full MCP + model config (from `render-opencode.*`)
 - `OPENCODE_REF` — git tag built into image (e.g. `v1.17.13`); see Version upgrades above
 - `COMMON_VARS` keys: `FIRECRAWL_API_KEY`, `OPENROUTER_API_KEY`, `RETELL_API_KEY`, `RESEND_API_KEY`, `SUPABASE_PAT`, `GITHUB_TOKEN`, `N8N_*`, `RAILWAY_API_TOKEN`, `SENTRY_ACCESS_TOKEN`, `BETTERSTACK_API_TOKEN`, `POSTHOG_PERSONAL_API_KEY`
+- `SEARXNG_URL` — Railway reference to private `searxng-railway` service (for `mcp-searxng`)
 - `OPENCODE_SERVER_PASSWORD`
 - `OPENCODE_MODEL`
 - `OPENCODE_WORKSPACE=/data/workspace`

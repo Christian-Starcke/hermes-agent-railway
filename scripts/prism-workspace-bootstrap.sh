@@ -9,7 +9,7 @@ WORKSPACE_ROOT="${WORKSPACE_ROOT:-${OPENCODE_WORKSPACE:-/data/workspace}}"
 ORG_DIR="${WORKSPACE_ROOT}/prism-platform-ap"
 PREFIX="${WORKSPACE_BOOTSTRAP_PREFIX:-[prism-workspace]}"
 
-GIT_REPO_N8N="${GIT_REPO_N8N:-https://github.com/prism-platform-ap/n8n-as-code}"
+GIT_REPO_N8N="${GIT_REPO_N8N:-https://github.com/Christian-Starcke/n8n-as-code}"
 GIT_REPO_PLAYBOOK="${GIT_REPO_PLAYBOOK:-https://github.com/prism-platform-ap/prism-playbook}"
 GIT_REPO_PLATFORM="${GIT_REPO_PLATFORM:-https://github.com/prism-platform-ap/prism-platform}"
 GIT_REPO_KNOWLEDGE="${GIT_REPO_KNOWLEDGE:-https://github.com/prism-platform-ap/prism-knowledge}"

@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-"""Verify 12 MCP servers on OpenCode after connections-hub sync."""
+﻿#!/usr/bin/env python3
+"""Verify 13 MCP servers on OpenCode after connections-hub sync."""
 from __future__ import annotations
 
 import os
@@ -14,6 +14,7 @@ AUTH = (os.environ.get("OPENCODE_SERVER_USER", "opencode"), os.environ["OPENCODE
 EXPECTED = {
     "github",
     "firecrawl",
+    "searxng",
     "railway",
     "retellai",
     "supabase",
@@ -79,7 +80,7 @@ def main() -> None:
 
         found = set(re.findall(r"\b([a-z_]+)\b", mcp_out.lower()))
         matched = EXPECTED & found
-        print(f"matched {len(matched)}/12:", sorted(matched))
+        print(f"matched {len(matched)}/13:", sorted(matched))
 
         smoke = run_shell(client, "verify-smoke", smoke_cmd)
         print("=== smoke ===")
