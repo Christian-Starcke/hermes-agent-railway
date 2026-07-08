@@ -1,5 +1,5 @@
 [build]
-watchPatterns = ["opencode-telegram-railway/**"]
+watchPatterns = ["**"]
 
 [deploy]
 healthcheckPath = ""

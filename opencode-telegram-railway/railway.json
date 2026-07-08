@@ -3,7 +3,7 @@
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "Dockerfile",
-    "watchPatterns": ["opencode-telegram-railway/**"]
+    "watchPatterns": ["**"]
   },
   "deploy": {
     "numReplicas": 1,
