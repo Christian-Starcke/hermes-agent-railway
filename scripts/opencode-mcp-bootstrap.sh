@@ -9,7 +9,48 @@ export npm_config_cache="${NPM_CONFIG_CACHE}"
 export PATH="${NPM_GLOBAL}/bin:${PATH}"
 PREFIX="[opencode-mcp-bootstrap]"
 
-mkdir -p "${NPM_GLOBAL}" "${NPM_CONFIG_CACHE}"
+mkdir -p "${NPM_GLOBAL}" "${NPM_CONFIG_CACHE}" "${DATA_ROOT}/.config/opencode"
+
+# Sync OPENCODE_CONFIG_CONTENT → volume config so UI toggles cannot leave MCPs disabled.
+sync_opencode_config() {
+  local dest="${DATA_ROOT}/.config/opencode/opencode.json"
+  if [ -z "${OPENCODE_CONFIG_CONTENT:-}" ]; then
+    echo "${PREFIX} skip config sync (OPENCODE_CONFIG_CONTENT unset)"
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "${PREFIX} warn: python3 missing — writing raw OPENCODE_CONFIG_CONTENT"
+    printf '%s' "${OPENCODE_CONFIG_CONTENT}" > "${dest}"
+    return 0
+  fi
+  OPENCODE_CONFIG_DEST="${dest}" python3 - <<'PY'
+import json, os
+from pathlib import Path
+
+dest = Path(os.environ["OPENCODE_CONFIG_DEST"])
+cfg = json.loads(os.environ["OPENCODE_CONFIG_CONTENT"])
+for server in cfg.get("mcp", {}).values():
+    if isinstance(server, dict):
+        server["enabled"] = True
+
+existing = {}
+if dest.exists():
+    try:
+        existing = json.loads(dest.read_text())
+    except Exception:
+        existing = {}
+
+# Preserve plugin list injected by the Railway wrapper.
+if "plugin" in existing and "plugin" not in cfg:
+    cfg["plugin"] = existing["plugin"]
+
+dest.write_text(json.dumps(cfg, indent=2) + "\n")
+print(f"synced {len(cfg.get('mcp', {}))} MCP servers to {dest}")
+PY
+  echo "${PREFIX} opencode.json synced from OPENCODE_CONFIG_CONTENT"
+}
+
+sync_opencode_config
 
 if command -v railway >/dev/null 2>&1 && railway --version >/dev/null 2>&1; then
   echo "${PREFIX} railway CLI already present: $(railway --version 2>/dev/null | head -1)"
