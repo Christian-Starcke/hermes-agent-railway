@@ -13,9 +13,25 @@ mkdir -p "${NPM_GLOBAL}" "${NPM_CONFIG_CACHE}"
 
 if command -v railway >/dev/null 2>&1 && railway --version >/dev/null 2>&1; then
   echo "${PREFIX} railway CLI already present: $(railway --version 2>/dev/null | head -1)"
-  exit 0
+else
+  echo "${PREFIX} installing @railway/cli to ${NPM_GLOBAL}..."
+  npm install --prefix "${NPM_GLOBAL}" --global @railway/cli --no-audit --no-fund
+  echo "${PREFIX} installed: $(railway --version 2>/dev/null | head -1)"
 fi
 
-echo "${PREFIX} installing @railway/cli to ${NPM_GLOBAL}..."
-npm install --prefix "${NPM_GLOBAL}" --global @railway/cli --no-audit --no-fund
-echo "${PREFIX} installed: $(railway --version 2>/dev/null | head -1)"
+warm_mcp_package() {
+  local label="$1"
+  shift
+  echo "${PREFIX} warming ${label}..."
+  if timeout 120 "$@" >/dev/null 2>&1; then
+    echo "${PREFIX} ${label} ready"
+    return 0
+  fi
+  echo "${PREFIX} warn: ${label} warm failed (will retry on next boot)"
+  return 0
+}
+
+# n8nac MCP uses npx; volume maintenance must not delete _npx caches. Warm a clean install anyway.
+rm -rf "${NPM_CONFIG_CACHE}/_npx" 2>/dev/null || true
+warm_mcp_package "n8nac CLI" npx --yes n8nac --version
+warm_mcp_package "@n8n-as-code/mcp" npx --yes @n8n-as-code/mcp --help

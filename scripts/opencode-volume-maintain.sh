@@ -33,8 +33,9 @@ usage_pct() {
 }
 
 prune_npm_caches() {
+  # Prune download caches only — keep _npx tool installs used by OpenCode MCP servers.
   rm -rf \
-    "${DATA_ROOT}/.npm-cache"/* \
+    "${DATA_ROOT}/.npm-cache/_cacache" \
     "${DATA_ROOT}/.npm-global/.npm/_cacache" \
     "${DATA_ROOT}/.npm/_cacache" \
     /root/.npm/_cacache 2>/dev/null || true
