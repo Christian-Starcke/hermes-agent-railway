@@ -18,7 +18,7 @@ ENV OPENCODE_TELEGRAM_HOME=/data
 
 RUN mkdir -p /data
 
-COPY opencode-telegram-railway/entrypoint.sh /entrypoint.sh
+COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/usr/bin/tini", "-g", "--", "/entrypoint.sh"]
