@@ -51,13 +51,17 @@ After delegation completes:
 ## Required workflow
 
 1. **Context** — Read `TASK_NOTEBOOK.md` and find relevant open issue(s) when applicable.
-2. **Workspace** — Set `workspace_hint` to a path under `/data/workspace` (e.g. `prism-platform-ap/prism-platform`, `prism-platform-ap/n8n-as-code`, or `workflows` at workspace root for n8n).
+2. **Workspace** — Set `workspace_hint` to a path under `/data/workspace`:
+   - n8n workflows: use **root paths** (`workflows`, `n8nac-config.json`) — not `prism-platform-ap/n8n-as-code` unless you symlinked
+   - Prism app: `prism-platform-ap/prism-platform`
 3. **Objective** — Short title matching the task.
 4. **Prompt** — Detailed instructions. Must include:
    - Issue reference when applicable
    - Link to notebook when Prism work
    - Acceptance criteria
    - `Do not merge the PR.`
+   - **Notebook edits:** `Run: bash /data/opencode-workspace-ensure.sh prism-playbook` before editing `TASK_NOTEBOOK.md`
+   - **Tests / coverage:** before changes, run `bash /data/opencode-workspace-prep-test.sh <workspace_hint>` then `npx vitest run --coverage` (or the repo's `npm test` script)
 5. **Delegate** — Call `opencode_create_task` with `agent: build` unless planning-only.
 6. **Report** — Tell the user delegation started; share `task_id` and OpenCode `session_id`.
 7. **Poll** — Use `opencode_get_task` or `opencode_poll_pending_tasks` when the user asks for status.
@@ -107,6 +111,6 @@ To use an OpenCode tool when deferred:
 
 Actions:
 
-1. `opencode_create_task` with `workspace_hint: n8n-as-code`, objective and prompt describing the change.
+1. `opencode_create_task` with `workspace_hint: workflows` (or `prism-platform-ap/prism-platform`), objective and prompt describing the change.
 2. Poll with `opencode_get_task` until `finished` or `error`.
 3. Summarize changes for the user.

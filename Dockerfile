@@ -90,7 +90,15 @@ COPY entrypoint.sh ./entrypoint.sh
 
 # Owned by `hermes` so `git fetch`/`hermes update` from the Web TUI do not trip
 # "detected dubious ownership" (repos owned by root, commands run as hermes).
-RUN chmod +x /opt/hermes-railway/entrypoint.sh /opt/hermes-railway/scripts/prism-workspace-bootstrap.sh /opt/hermes-railway/opencode-railway/workspace-bootstrap.sh && \
+RUN chmod +x \
+      /opt/hermes-railway/entrypoint.sh \
+      /opt/hermes-railway/scripts/prism-workspace-bootstrap.sh \
+      /opt/hermes-railway/scripts/opencode-volume-maintain.sh \
+      /opt/hermes-railway/scripts/opencode-mcp-bootstrap.sh \
+      /opt/hermes-railway/scripts/opencode-workspace-ensure.sh \
+      /opt/hermes-railway/scripts/opencode-workspace-prep-test.sh \
+      /opt/hermes-railway/opencode-railway/workspace-bootstrap.sh \
+      /opt/hermes-railway/opencode-railway/opencode-volume-maintain-loop.sh && \
     mkdir -p /data && \
     chown -R hermes:hermes \
       /opt/hermes \

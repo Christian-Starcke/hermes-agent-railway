@@ -1,27 +1,21 @@
 #!/usr/bin/env bash
-# Bootstrap Railway CLI + OpenCode config dirs on the OpenCode /data volume.
+# Install Railway CLI to /data/.npm-global for OpenCode MCP (idempotent).
 set -euo pipefail
 
-PREFIX="${OPENCODE_MCP_BOOTSTRAP_PREFIX:-[opencode-mcp-bootstrap]}"
-NPM_PREFIX="${NPM_CONFIG_PREFIX:-/data/.npm-global}"
-RAILWAY_HOME="/data/.railway"
+DATA_ROOT="${RAILWAY_VOLUME_MOUNT_PATH:-/data}"
+NPM_GLOBAL="${DATA_ROOT}/.npm-global"
+export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-${DATA_ROOT}/.npm-cache}"
+export npm_config_cache="${NPM_CONFIG_CACHE}"
+export PATH="${NPM_GLOBAL}/bin:${PATH}"
+PREFIX="[opencode-mcp-bootstrap]"
 
-mkdir -p "${NPM_PREFIX}/bin" /data/.config/opencode /data/logs "${RAILWAY_HOME}"
-export NPM_CONFIG_PREFIX="${NPM_PREFIX}"
-export PATH="${NPM_PREFIX}/bin:${PATH}"
+mkdir -p "${NPM_GLOBAL}" "${NPM_CONFIG_CACHE}"
 
-if [ -n "${RAILWAY_API_TOKEN:-}" ]; then
-  export RAILWAY_TOKEN="${RAILWAY_API_TOKEN}"
+if command -v railway >/dev/null 2>&1 && railway --version >/dev/null 2>&1; then
+  echo "${PREFIX} railway CLI already present: $(railway --version 2>/dev/null | head -1)"
+  exit 0
 fi
 
-if [ ! -e "${HOME}/.railway" ]; then
-  ln -sf "${RAILWAY_HOME}" "${HOME}/.railway"
-fi
-
-if ! command -v railway >/dev/null 2>&1; then
-  echo "${PREFIX} installing @railway/cli into ${NPM_PREFIX}"
-  npm install -g @railway/cli
-fi
-
-echo "${PREFIX} railway=$(command -v railway)"
-echo "${PREFIX} opencode config dir ready"
+echo "${PREFIX} installing @railway/cli to ${NPM_GLOBAL}..."
+npm install --prefix "${NPM_GLOBAL}" --global @railway/cli --no-audit --no-fund
+echo "${PREFIX} installed: $(railway --version 2>/dev/null | head -1)"

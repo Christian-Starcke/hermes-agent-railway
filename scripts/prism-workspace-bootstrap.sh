@@ -2,12 +2,14 @@
 # Clone or pull prism-platform-ap org repos into a Hermes/OpenCode workspace volume.
 # Layout mirrors Hermes WebUI workspace:
 #   ${WORKSPACE_ROOT}/              <- n8n-as-code root (AGENTS.md, workflows/, ...)
-#   ${WORKSPACE_ROOT}/prism-platform-ap/{n8n-as-code,prism-knowledge,prism-platform,prism-playbook}
+#   ${WORKSPACE_ROOT}/prism-platform-ap/{prism-platform, prism-playbook, ...}
 set -euo pipefail
 
 WORKSPACE_ROOT="${WORKSPACE_ROOT:-${OPENCODE_WORKSPACE:-/data/workspace}}"
 ORG_DIR="${WORKSPACE_ROOT}/prism-platform-ap"
 PREFIX="${WORKSPACE_BOOTSTRAP_PREFIX:-[prism-workspace]}"
+# Comma list: n8n,platform,playbook,knowledge — default all for Hermes; OpenCode uses n8n,platform
+WORKSPACE_BOOTSTRAP_REPOS="${WORKSPACE_BOOTSTRAP_REPOS:-n8n,platform,playbook,knowledge}"
 
 GIT_REPO_N8N="${GIT_REPO_N8N:-https://github.com/Christian-Starcke/n8n-as-code}"
 GIT_REPO_PLAYBOOK="${GIT_REPO_PLAYBOOK:-https://github.com/prism-platform-ap/prism-playbook}"
@@ -15,6 +17,11 @@ GIT_REPO_PLATFORM="${GIT_REPO_PLATFORM:-https://github.com/prism-platform-ap/pri
 GIT_REPO_KNOWLEDGE="${GIT_REPO_KNOWLEDGE:-https://github.com/prism-platform-ap/prism-knowledge}"
 
 mkdir -p "${WORKSPACE_ROOT}" "${ORG_DIR}"
+
+repo_enabled() {
+  local key="$1"
+  echo ",${WORKSPACE_BOOTSTRAP_REPOS}," | grep -qi ",${key},"
+}
 
 configure_git_auth() {
   if [ -n "${GITHUB_TOKEN:-}" ]; then
@@ -67,6 +74,17 @@ clone_or_pull_root_n8n() {
   rm -rf "${tmp}"
 }
 
+link_n8n_org_symlink() {
+  local link="${ORG_DIR}/n8n-as-code"
+  if [ -e "${link}" ] || [ -L "${link}" ]; then
+    return 0
+  fi
+  if [ -f "${WORKSPACE_ROOT}/n8nac-config.json" ] || [ -d "${WORKSPACE_ROOT}/.git" ]; then
+    echo "${PREFIX} symlink ${link} -> ../.. (workspace root n8n-as-code)"
+    ln -sfn "../.." "${link}"
+  fi
+}
+
 link_project_board() {
   local board="${ORG_DIR}/PROJECT_BOARD.md"
   if [ -e "${board}" ]; then
@@ -115,15 +133,25 @@ if [ "${WORKSPACE_BOOTSTRAP:-}" != "true" ] && [ "${WORKSPACE_BOOTSTRAP:-}" != "
 fi
 
 configure_git_auth
-clone_or_pull_root_n8n
-clone_or_pull "${GIT_REPO_N8N}" "${ORG_DIR}/n8n-as-code"
-clone_or_pull "${GIT_REPO_KNOWLEDGE}" "${ORG_DIR}/prism-knowledge"
-clone_or_pull "${GIT_REPO_PLATFORM}" "${ORG_DIR}/prism-platform"
-clone_or_pull "${GIT_REPO_PLAYBOOK}" "${ORG_DIR}/prism-playbook"
+
+if repo_enabled n8n; then
+  clone_or_pull_root_n8n
+fi
+if repo_enabled platform; then
+  clone_or_pull "${GIT_REPO_PLATFORM}" "${ORG_DIR}/prism-platform"
+  link_n8n_org_symlink
+fi
+if repo_enabled knowledge; then
+  clone_or_pull "${GIT_REPO_KNOWLEDGE}" "${ORG_DIR}/prism-knowledge"
+fi
+if repo_enabled playbook; then
+  clone_or_pull "${GIT_REPO_PLAYBOOK}" "${ORG_DIR}/prism-playbook"
+fi
+
 link_project_board
 link_gtm_dashboard
 configure_n8n_env
 
-echo "${PREFIX} workspace ready at ${WORKSPACE_ROOT}"
+echo "${PREFIX} workspace ready at ${WORKSPACE_ROOT} (repos: ${WORKSPACE_BOOTSTRAP_REPOS})"
 ls -la "${WORKSPACE_ROOT}"
 ls -la "${ORG_DIR}" 2>/dev/null || true
