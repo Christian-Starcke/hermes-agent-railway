@@ -33,12 +33,17 @@ usage_pct() {
 }
 
 prune_npm_caches() {
-  # Prune download caches only — keep _npx tool installs used by OpenCode MCP servers.
+  # Aggressive only: prune npm download caches. Never delete _npx on normal boots — MCP servers depend on it.
   rm -rf \
     "${DATA_ROOT}/.npm-cache/_cacache" \
     "${DATA_ROOT}/.npm-global/.npm/_cacache" \
     "${DATA_ROOT}/.npm/_cacache" \
     /root/.npm/_cacache 2>/dev/null || true
+}
+
+prune_npx_caches() {
+  # Last resort when disk is nearly full — MCP bootstrap will re-warm on next boot.
+  rm -rf "${DATA_ROOT}/.npm-cache/_npx" 2>/dev/null || true
 }
 
 prune_node_modules() {
@@ -89,10 +94,11 @@ if [ "${pct}" -ge "${WARN_PCT}" ] 2>/dev/null; then
 fi
 
 if [ "${aggressive}" = "1" ]; then
+  prune_npm_caches
+  prune_npx_caches
   prune_node_modules 0 1
   prune_lazy_repos "${LAZY_MAX_AGE_DAYS}"
 else
-  prune_npm_caches
   prune_node_modules "${NODE_MAX_AGE_DAYS}" 0
 fi
 

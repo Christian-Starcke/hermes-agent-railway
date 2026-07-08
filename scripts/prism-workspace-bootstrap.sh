@@ -112,8 +112,14 @@ configure_n8n_env() {
   if ! command -v n8nac >/dev/null 2>&1; then
     return 0
   fi
-  echo "${PREFIX} configuring n8nac Dev environment..."
   cd "${WORKSPACE_ROOT}"
+  local active_id
+  active_id="$(n8nac env status --json 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('environmentId',''))" 2>/dev/null || true)"
+  if [ -n "${active_id}" ] && n8nac env list 2>/dev/null | grep -q "Dev"; then
+    echo "${PREFIX} n8nac env already configured (active: ${active_id}) — skip"
+    return 0
+  fi
+  echo "${PREFIX} configuring n8nac Dev environment..."
   if n8nac env list 2>/dev/null | grep -q "Dev"; then
     n8nac env use Dev 2>/dev/null || true
     printf '%s' "${N8N_API_KEY}" | n8nac env auth set Dev --api-key-stdin 2>/dev/null || true

@@ -31,7 +31,11 @@ warm_mcp_package() {
   return 0
 }
 
-# n8nac MCP uses npx; volume maintenance must not delete _npx caches. Warm a clean install anyway.
-rm -rf "${NPM_CONFIG_CACHE}/_npx" 2>/dev/null || true
-warm_mcp_package "n8nac CLI" npx --yes n8nac --version
-warm_mcp_package "@n8n-as-code/mcp" npx --yes @n8n-as-code/mcp --help
+# Warm npx MCP packages only when missing or broken — never purge _npx on every boot.
+if ! npx --yes n8nac --version >/dev/null 2>&1; then
+  echo "${PREFIX} n8nac npx cache missing or corrupt — rebuilding..."
+  rm -rf "${NPM_CONFIG_CACHE}/_npx" 2>/dev/null || true
+  warm_mcp_package "n8nac MCP packages" npx --yes -p n8nac -p @n8n-as-code/mcp n8nac --version
+else
+  echo "${PREFIX} n8nac npx cache ok: $(npx --yes n8nac --version 2>/dev/null | head -1)"
+fi
