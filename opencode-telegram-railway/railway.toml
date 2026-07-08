@@ -1,0 +1,6 @@
+[build]
+watchPatterns = ["opencode-telegram-railway/**"]
+
+[deploy]
+healthcheckPath = ""
+restartPolicyType = "ON_FAILURE"
