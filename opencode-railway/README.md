@@ -115,7 +115,7 @@ Set on **opencode** service (via `sync-railway.*`):
 - `OPENCODE_CONFIG_CONTENT` — full MCP + model config (from `render-opencode.*`)
 - `OPENCODE_REF` — git tag built into image (e.g. `v1.17.13`); see Version upgrades above
 - `COMMON_VARS` keys: `FIRECRAWL_API_KEY`, `OPENROUTER_API_KEY`, `RETELL_API_KEY`, `RESEND_API_KEY`, `SUPABASE_PAT`, `GITHUB_TOKEN`, `N8N_*`, `RAILWAY_API_TOKEN`, `SENTRY_ACCESS_TOKEN`, `BETTERSTACK_API_TOKEN`, `POSTHOG_PERSONAL_API_KEY`
-- `SEARXNG_URL` — Railway reference to private `searxng-railway` service (for `mcp-searxng`)
+- `SEARXNG_URL` — private `searxng-opencode` service (`http://searxng-opencode.railway.internal:8080`) for `mcp-searxng`
 - `OPENCODE_SERVER_PASSWORD`
 - `OPENCODE_MODEL`
 - `OPENCODE_WORKSPACE=/data/workspace`
