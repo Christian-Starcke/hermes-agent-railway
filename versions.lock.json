@@ -1,7 +1,7 @@
 {
   "hermes_webui": "v0.52.76",
-  "hermes_agent": "v2026.7.7.2",
+  "hermes_agent": "v2026.7.20",
   "opencode_telegram_bot": "0.22.1",
-  "updated_at": "2026-07-19T02:40:47Z",
+  "updated_at": "2026-07-20T19:43:14Z",
   "note": "Bumped by .github/workflows/upstream-release-watch.yml when nesquena/hermes-webui or NousResearch/hermes-agent publishes a new GitHub release. opencode_telegram_bot is pinned manually."
 }
