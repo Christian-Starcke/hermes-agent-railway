@@ -339,11 +339,20 @@ async def _proxy_to_api_server(request: Request, path: str) -> Response:
         upstream_port=API_SERVER_PORT,
         forwarded_prefix=None,
     )
-    # Drop public-only header; inject Bearer for loopback API server.
+    # Drop browser/WebUI cookies and public auth headers; inject loopback Bearer.
+    # Forwarding WebUI session cookies to the API server has produced opaque 403s.
     upstream_headers = {
         k: v
         for k, v in upstream_headers.items()
-        if k.lower() not in ("authorization", "x-hermes-api-key")
+        if k.lower()
+        not in (
+            "authorization",
+            "x-hermes-api-key",
+            "cookie",
+            "cookie2",
+            "csrf-token",
+            "x-csrf-token",
+        )
     }
     api_key = _public_api_key(request)
     if api_key:
