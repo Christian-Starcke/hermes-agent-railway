@@ -333,31 +333,31 @@ async def _proxy_to_api_server(request: Request, path: str) -> Response:
         )
 
     client = await _ensure_api_client()
-    upstream_headers = filter_upstream_request_headers(
-        request.headers,
-        upstream_host=API_SERVER_HOST,
-        upstream_port=API_SERVER_PORT,
-        forwarded_prefix=None,
-    )
-    # Drop browser/WebUI cookies and public auth headers; inject loopback Bearer.
-    # Forwarding WebUI session cookies to the API server has produced opaque 403s.
-    upstream_headers = {
-        k: v
-        for k, v in upstream_headers.items()
-        if k.lower()
-        not in (
-            "authorization",
-            "x-hermes-api-key",
-            "cookie",
-            "cookie2",
-            "csrf-token",
-            "x-csrf-token",
-        )
-    }
-    api_key = _public_api_key(request)
-    if api_key:
-        upstream_headers["authorization"] = f"Bearer {api_key}"
     body = await request.body()
+    # Minimal loopback headers only. Forwarding browser Origin/Cookie/etc. has
+    # produced empty HTTP 403 from the API server even with a valid Bearer key.
+    server_key = (os.environ.get("API_SERVER_KEY") or "").strip()
+    provided = _public_api_key(request)
+    if not server_key:
+        return Response(
+            "API_SERVER_KEY is not configured on this service.",
+            status_code=503,
+            media_type="text/plain",
+        )
+    if provided != server_key:
+        return Response(
+            json.dumps({"error": "Unauthorized", "detail": "Invalid or missing X-Hermes-API-Key"}),
+            status_code=401,
+            media_type="application/json",
+        )
+    upstream_headers = {
+        "host": f"{API_SERVER_HOST}:{API_SERVER_PORT}",
+        "authorization": f"Bearer {server_key}",
+        "accept": "application/json",
+    }
+    content_type = (request.headers.get("content-type") or "").strip()
+    if content_type:
+        upstream_headers["content-type"] = content_type
     try:
         req = client.build_request(
             request.method,
