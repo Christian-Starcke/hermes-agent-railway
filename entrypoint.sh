@@ -562,23 +562,35 @@ fi
 # Also required for Hermes API_SERVER (OpenAI-compatible + /api/sessions REST).
 if [ "${START_GATEWAY:-false}" = "true" ]; then
   GATEWAY_LOG="${HERMES_HOME}/logs/gateway.log"
+  # Hermes itself opens GATEWAY_LOG via RotatingFileHandler — must stay hermes-owned.
+  # Capture process stdout/stderr separately so entrypoint never chown-fights that file.
+  GATEWAY_STDOUT="${HERMES_HOME}/logs/gateway.stdout.log"
   GATEWAY_PID_FILE="${HERMES_HOME}/gateway.pid"
   mkdir -p "${HERMES_HOME}/logs"
-  # Rotate so readiness checks don't match stale "listening" lines from prior boots.
-  if [ -f "${GATEWAY_LOG}" ]; then
-    mv -f "${GATEWAY_LOG}" "${GATEWAY_LOG}.prev" 2>/dev/null || true
+  touch "${GATEWAY_LOG}" "${GATEWAY_STDOUT}"
+  if [ "$(id -u)" = "0" ]; then
+    chown hermes:hermes "${HERMES_HOME}/logs" "${GATEWAY_LOG}" "${GATEWAY_STDOUT}" 2>/dev/null || true
+  fi
+  # Rotate stdout capture only (not hermes' own gateway.log).
+  if [ -s "${GATEWAY_STDOUT}" ]; then
+    mv -f "${GATEWAY_STDOUT}" "${GATEWAY_STDOUT}.prev" 2>/dev/null || true
+    touch "${GATEWAY_STDOUT}"
+    if [ "$(id -u)" = "0" ]; then
+      chown hermes:hermes "${GATEWAY_STDOUT}" 2>/dev/null || true
+    fi
   fi
   echo "Starting Hermes messaging gateway in background..."
-  printf '\n--- Starting Hermes gateway %s ---\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GATEWAY_LOG}"
+  printf '\n--- Starting Hermes gateway %s ---\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GATEWAY_STDOUT}"
   if [ "$(id -u)" = "0" ]; then
+    chown hermes:hermes "${GATEWAY_STDOUT}" 2>/dev/null || true
     setsid gosu hermes /opt/hermes/.venv/bin/hermes gateway run --replace \
-      >> "${GATEWAY_LOG}" 2>&1 < /dev/null &
+      >> "${GATEWAY_STDOUT}" 2>&1 < /dev/null &
   else
     setsid /opt/hermes/.venv/bin/hermes gateway run --replace \
-      >> "${GATEWAY_LOG}" 2>&1 < /dev/null &
+      >> "${GATEWAY_STDOUT}" 2>&1 < /dev/null &
   fi
   echo $! > "${GATEWAY_PID_FILE}"
-  echo "Gateway PID: $(cat "${GATEWAY_PID_FILE}") (logs at ${GATEWAY_LOG})"
+  echo "Gateway PID: $(cat "${GATEWAY_PID_FILE}") (stdout at ${GATEWAY_STDOUT})"
   # Wait for API server via live HTTP probe (not log grep — log can be stale).
   API_READY=0
   API_PROBE_URL="http://127.0.0.1:${API_SERVER_PORT:-8642}/health"
@@ -589,8 +601,8 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
       break
     fi
     if [ -f "${GATEWAY_PID_FILE}" ] && ! kill -0 "$(cat "${GATEWAY_PID_FILE}")" 2>/dev/null; then
-      echo "[entrypoint] gateway process exited early — last log lines:"
-      tail -n 80 "${GATEWAY_LOG}" 2>/dev/null || true
+      echo "[entrypoint] gateway process exited early — last stdout lines:"
+      tail -n 80 "${GATEWAY_STDOUT}" 2>/dev/null || true
       break
     fi
   done
@@ -599,8 +611,8 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
     curl -sS --max-time 2 "${API_PROBE_URL}" || true
     echo
   else
-    echo "[entrypoint] API server not reachable at ${API_PROBE_URL} after wait — last gateway log lines:"
-    tail -n 80 "${GATEWAY_LOG}" 2>/dev/null || true
+    echo "[entrypoint] API server not reachable at ${API_PROBE_URL} after wait — last stdout lines:"
+    tail -n 80 "${GATEWAY_STDOUT}" 2>/dev/null || true
   fi
 fi
 
