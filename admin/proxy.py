@@ -93,13 +93,13 @@ def _public_api_key(request: Request) -> str | None:
 
 
 # Public mount for the API server.
-# Railway hikari edge on this host blocks bare `/v1/*` and the previous `/hapi/*`
-# mount (empty HTTP 403). Use `/xapi` instead; Orchestrator sets
-# HERMES_API_URL=https://<host>/xapi.
-API_PUBLIC_PREFIX = (os.environ.get("API_PUBLIC_PREFIX") or "/xapi").strip() or "/xapi"
+# Railway hikari on this host empty-403s bare `/v1/*`, `/hapi/*`, and can
+# blackhole a mount after repeated 502s. Default `/orch`; Orchestrator sets
+# HERMES_API_URL=https://<host>/orch.
+API_PUBLIC_PREFIX = (os.environ.get("API_PUBLIC_PREFIX") or "/orch").strip() or "/orch"
 if not API_PUBLIC_PREFIX.startswith("/"):
     API_PUBLIC_PREFIX = "/" + API_PUBLIC_PREFIX
-API_PUBLIC_PREFIX = API_PUBLIC_PREFIX.rstrip("/") or "/xapi"
+API_PUBLIC_PREFIX = API_PUBLIC_PREFIX.rstrip("/") or "/orch"
 
 # Friendly public paths under the mount → API-server paths (avoids edge-blocked
 # shapes like bare `/v1/...` when clients call `{mount}/models`).
@@ -115,7 +115,7 @@ def _api_upstream_path(path: str, bare_path: str) -> str:
     if "?" in path:
         _, query = path.split("?", 1)
         query = "?" + query
-    for prefix in (API_PUBLIC_PREFIX, "/hapi"):
+    for prefix in (API_PUBLIC_PREFIX, "/hapi", "/xapi"):
         if bare_path == prefix or bare_path.startswith(prefix + "/"):
             stripped = bare_path[len(prefix) :] or "/"
             stripped = _API_MOUNT_ALIASES.get(stripped, stripped)
@@ -124,28 +124,24 @@ def _api_upstream_path(path: str, bare_path: str) -> str:
 
 
 def _wants_api_server(request: Request, bare_path: str) -> bool:
-    """Route API-server paths.
+    """Route API-server paths under the public mount only.
 
-    Always claim the public mount (`/xapi/*`, legacy `/hapi/*`), OpenAI `/v1/*`,
-    and Sessions/Jobs API paths — do not gate routing on the API key. Gating on
-    the key previously made unauthenticated `/api/sessions` hit WebUI (cookie
-    auth) while keyed requests hit the API server, which confused debugging and
-    could trip edge rules that only fire on the keyed path.
+    Do not steal bare `/api/sessions` from WebUI — that path is cookie-auth and
+    also gets edge-blocked when we 502 from a down API server. Orchestrator
+    always uses `{HERMES_API_URL}/api/sessions` with HERMES_API_URL ending in
+    the mount (e.g. `/orch`).
     """
-    del request  # routing is path-based; auth is applied in _proxy_to_api_server
+    del request
     if bare_path == API_PUBLIC_PREFIX or bare_path.startswith(API_PUBLIC_PREFIX + "/"):
         return True
     if bare_path == "/hapi" or bare_path.startswith("/hapi/"):
         return True
+    if bare_path == "/xapi" or bare_path.startswith("/xapi/"):
+        return True
+    # Bare /v1 is edge-blocked on this host; keep mapping for local/dev only.
     if bare_path == "/v1" or bare_path.startswith("/v1/"):
         return True
-    return (
-        bare_path == "/api/sessions"
-        or bare_path.startswith("/api/sessions/")
-        or bare_path == "/api/jobs"
-        or bare_path.startswith("/api/jobs/")
-        or bare_path == "/health/detailed"
-    )
+    return False
 
 
 def _oauth_configured() -> bool:
@@ -331,11 +327,14 @@ async def _proxy_to_api_server(request: Request, path: str) -> Response:
             content=body if body else None,
         )
         upstream = await client.send(req, stream=True)
-    except httpx.ConnectError:
+    except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout):
+        # Prefer 503 over 502: Railway hikari has blackholed mounts (/hapi, /xapi)
+        # after repeated 502s from this proxy when the gateway was still starting.
         return Response(
             "Hermes API server unavailable. Ensure API_SERVER_ENABLED=true and the gateway is running.",
-            status_code=502,
+            status_code=503,
             media_type="text/plain",
+            headers={"Retry-After": "5"},
         )
 
     async def body_iter():

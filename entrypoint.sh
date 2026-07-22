@@ -595,21 +595,33 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
   echo "Gateway launcher PID: $(cat "${GATEWAY_PID_FILE}") (stdout at ${GATEWAY_STDOUT})"
   # `hermes gateway run` often daemonizes — the launcher PID can exit while the
   # real gateway keeps running. Never abort on kill -0; only trust HTTP readiness.
+  # Wait long enough that the public proxy never 502/503s the mount on first
+  # traffic (Railway hikari blackholes mounts after repeated upstream failures).
   API_READY=0
   API_PROBE_URL="http://127.0.0.1:${API_SERVER_PORT:-8642}/health"
-  echo "[entrypoint] waiting up to 90s for API server at ${API_PROBE_URL}"
-  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45; do
+  API_WAIT_ATTEMPTS="${API_SERVER_WAIT_ATTEMPTS:-90}"  # 90 * 2s = 180s
+  echo "[entrypoint] waiting up to $((API_WAIT_ATTEMPTS * 2))s for API server at ${API_PROBE_URL}"
+  i=0
+  while [ "$i" -lt "$API_WAIT_ATTEMPTS" ]; do
+    i=$((i + 1))
     sleep 2
     if curl -sf --max-time 2 "${API_PROBE_URL}" >/dev/null 2>&1; then
       API_READY=1
       break
     fi
-    # Best-effort: record whether a hermes gateway child is alive (informational).
-    if [ $((i % 5)) -eq 0 ]; then
+    if [ $((i % 10)) -eq 0 ]; then
       if pgrep -f "hermes.*gateway" >/dev/null 2>&1; then
-        echo "[entrypoint] still waiting for API (gateway process present, attempt ${i}/45)"
+        echo "[entrypoint] still waiting for API (gateway process present, attempt ${i}/${API_WAIT_ATTEMPTS})"
       else
-        echo "[entrypoint] still waiting for API (no gateway process matched, attempt ${i}/45)"
+        echo "[entrypoint] still waiting for API (no gateway process matched, attempt ${i}/${API_WAIT_ATTEMPTS}) — restarting gateway"
+        if [ "$(id -u)" = "0" ]; then
+          gosu hermes /opt/hermes/.venv/bin/hermes gateway run --replace \
+            >> "${GATEWAY_STDOUT}" 2>&1 < /dev/null &
+        else
+          /opt/hermes/.venv/bin/hermes gateway run --replace \
+            >> "${GATEWAY_STDOUT}" 2>&1 < /dev/null &
+        fi
+        echo $! > "${GATEWAY_PID_FILE}"
       fi
     fi
   done
@@ -618,8 +630,9 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
     curl -sS --max-time 2 "${API_PROBE_URL}" || true
     echo
   else
-    echo "[entrypoint] API server not reachable at ${API_PROBE_URL} after 90s — last stdout lines:"
+    echo "[entrypoint] API server not reachable at ${API_PROBE_URL} after wait — last stdout lines:"
     tail -n 200 "${GATEWAY_STDOUT}" 2>/dev/null || true
+    echo "[entrypoint] continuing startup anyway (WebUI may still work; /orch will 503 until API is up)"
   fi
 fi
 
