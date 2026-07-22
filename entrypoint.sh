@@ -581,12 +581,14 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
   fi
   echo "Starting Hermes messaging gateway in background..."
   printf '\n--- Starting Hermes gateway %s ---\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GATEWAY_STDOUT}"
+  # Do NOT use setsid here: setsid exits immediately and $! becomes useless for
+  # liveness checks (false "gateway exited early"). Keep the hermes PID in $!.
   if [ "$(id -u)" = "0" ]; then
     chown hermes:hermes "${GATEWAY_STDOUT}" 2>/dev/null || true
-    setsid gosu hermes /opt/hermes/.venv/bin/hermes gateway run --replace \
+    gosu hermes /opt/hermes/.venv/bin/hermes gateway run --replace \
       >> "${GATEWAY_STDOUT}" 2>&1 < /dev/null &
   else
-    setsid /opt/hermes/.venv/bin/hermes gateway run --replace \
+    /opt/hermes/.venv/bin/hermes gateway run --replace \
       >> "${GATEWAY_STDOUT}" 2>&1 < /dev/null &
   fi
   echo $! > "${GATEWAY_PID_FILE}"
@@ -594,7 +596,7 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
   # Wait for API server via live HTTP probe (not log grep — log can be stale).
   API_READY=0
   API_PROBE_URL="http://127.0.0.1:${API_SERVER_PORT:-8642}/health"
-  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45; do
     sleep 2
     if curl -sf --max-time 2 "${API_PROBE_URL}" >/dev/null 2>&1; then
       API_READY=1
@@ -602,7 +604,7 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
     fi
     if [ -f "${GATEWAY_PID_FILE}" ] && ! kill -0 "$(cat "${GATEWAY_PID_FILE}")" 2>/dev/null; then
       echo "[entrypoint] gateway process exited early — last stdout lines:"
-      tail -n 80 "${GATEWAY_STDOUT}" 2>/dev/null || true
+      tail -n 120 "${GATEWAY_STDOUT}" 2>/dev/null || true
       break
     fi
   done
@@ -612,7 +614,7 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
     echo
   else
     echo "[entrypoint] API server not reachable at ${API_PROBE_URL} after wait — last stdout lines:"
-    tail -n 80 "${GATEWAY_STDOUT}" 2>/dev/null || true
+    tail -n 120 "${GATEWAY_STDOUT}" 2>/dev/null || true
   fi
 fi
 
