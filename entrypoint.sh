@@ -563,8 +563,13 @@ fi
 if [ "${START_GATEWAY:-false}" = "true" ]; then
   GATEWAY_LOG="${HERMES_HOME}/logs/gateway.log"
   GATEWAY_PID_FILE="${HERMES_HOME}/gateway.pid"
+  mkdir -p "${HERMES_HOME}/logs"
+  # Rotate so readiness checks don't match stale "listening" lines from prior boots.
+  if [ -f "${GATEWAY_LOG}" ]; then
+    mv -f "${GATEWAY_LOG}" "${GATEWAY_LOG}.prev" 2>/dev/null || true
+  fi
   echo "Starting Hermes messaging gateway in background..."
-  printf '\n--- Starting Hermes gateway %s ---\n' "$(date)" >> "${GATEWAY_LOG}"
+  printf '\n--- Starting Hermes gateway %s ---\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${GATEWAY_LOG}"
   if [ "$(id -u)" = "0" ]; then
     setsid gosu hermes /opt/hermes/.venv/bin/hermes gateway run --replace \
       >> "${GATEWAY_LOG}" 2>&1 < /dev/null &
@@ -574,15 +579,15 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
   fi
   echo $! > "${GATEWAY_PID_FILE}"
   echo "Gateway PID: $(cat "${GATEWAY_PID_FILE}") (logs at ${GATEWAY_LOG})"
-  # Wait for API server bind (gateway import can take 10–30s on cold start)
+  # Wait for API server via live HTTP probe (not log grep — log can be stale).
   API_READY=0
-  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+  API_PROBE_URL="http://127.0.0.1:${API_SERVER_PORT:-8642}/health"
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
     sleep 2
-    if grep -Eqi "API [Ss]erver.*listening|API server listening" "${GATEWAY_LOG}" 2>/dev/null; then
+    if curl -sf --max-time 2 "${API_PROBE_URL}" >/dev/null 2>&1; then
       API_READY=1
       break
     fi
-    # Fail fast if gateway process died
     if [ -f "${GATEWAY_PID_FILE}" ] && ! kill -0 "$(cat "${GATEWAY_PID_FILE}")" 2>/dev/null; then
       echo "[entrypoint] gateway process exited early — last log lines:"
       tail -n 80 "${GATEWAY_LOG}" 2>/dev/null || true
@@ -590,9 +595,11 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
     fi
   done
   if [ "${API_READY}" = "1" ]; then
-    grep -Ei "API [Ss]erver" "${GATEWAY_LOG}" | tail -n 8 || true
+    echo "[entrypoint] API server ready at ${API_PROBE_URL}"
+    curl -sS --max-time 2 "${API_PROBE_URL}" || true
+    echo
   else
-    echo "[entrypoint] API Server not detected after wait — last gateway log lines:"
+    echo "[entrypoint] API server not reachable at ${API_PROBE_URL} after wait — last gateway log lines:"
     tail -n 80 "${GATEWAY_LOG}" 2>/dev/null || true
   fi
 fi
