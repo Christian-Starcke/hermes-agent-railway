@@ -512,10 +512,12 @@ if [ -n "${API_SERVER_ENABLED:-}" ] || [ -n "${API_SERVER_KEY:-}" ]; then
   export API_SERVER_PORT="${API_SERVER_PORT:-8642}"
   python3 - <<'PY' || true
 import os
+import re
 from pathlib import Path
 
 home = Path(os.environ.get("HERMES_HOME", "/data"))
-env_path = home / ".env"
+# Hermes loads HERMES_HOME/.env (and historically ~/.hermes/.env).
+targets = [home / ".env", home / ".hermes" / ".env"]
 keys = (
     "API_SERVER_ENABLED",
     "API_SERVER_KEY",
@@ -524,21 +526,33 @@ keys = (
     "API_SERVER_CORS_ORIGINS",
     "API_SERVER_MODEL_NAME",
 )
-existing: dict[str, str] = {}
-if env_path.is_file():
-    for line in env_path.read_text(encoding="utf-8").splitlines():
-        if not line or line.lstrip().startswith("#") or "=" not in line:
-            continue
-        k, _, v = line.partition("=")
-        existing[k.strip()] = v
-for key in keys:
-    val = os.environ.get(key)
-    if val is not None and str(val).strip() != "":
-        existing[key] = str(val)
-# Keep unrelated keys; rewrite file
-lines = [f"{k}={v}" for k, v in existing.items()]
-env_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
-print(f"[entrypoint] synced API_SERVER_* into {env_path}")
+updates = {k: os.environ[k] for k in keys if os.environ.get(k, "").strip() != ""}
+# Force loopback bind — public exposure is via admin/proxy.py
+updates["API_SERVER_HOST"] = os.environ.get("API_SERVER_HOST", "127.0.0.1").strip() or "127.0.0.1"
+updates.setdefault("API_SERVER_PORT", os.environ.get("API_SERVER_PORT", "8642") or "8642")
+updates.setdefault("API_SERVER_ENABLED", "true")
+
+def upsert(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    lines = text.splitlines()
+    seen = set()
+    out = []
+    for line in lines:
+        m = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", line)
+        if m and m.group(1) in updates:
+            out.append(f"{m.group(1)}={updates[m.group(1)]}")
+            seen.add(m.group(1))
+        else:
+            out.append(line)
+    for k, v in updates.items():
+        if k not in seen:
+            out.append(f"{k}={v}")
+    path.write_text("\n".join(out) + ("\n" if out else ""), encoding="utf-8")
+
+for t in targets:
+    upsert(t)
+    print(f"[entrypoint] upserted API_SERVER_* into {t}")
 PY
 fi
 
@@ -560,12 +574,26 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
   fi
   echo $! > "${GATEWAY_PID_FILE}"
   echo "Gateway PID: $(cat "${GATEWAY_PID_FILE}") (logs at ${GATEWAY_LOG})"
-  # Brief wait + tip so deploy logs show whether API server came up
-  sleep 2
-  if grep -q "API Server" "${GATEWAY_LOG}" 2>/dev/null; then
-    grep "API Server" "${GATEWAY_LOG}" | tail -n 5 || true
+  # Wait for API server bind (gateway import can take 10–30s on cold start)
+  API_READY=0
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    sleep 2
+    if grep -Eqi "API [Ss]erver.*listening|API server listening" "${GATEWAY_LOG}" 2>/dev/null; then
+      API_READY=1
+      break
+    fi
+    # Fail fast if gateway process died
+    if [ -f "${GATEWAY_PID_FILE}" ] && ! kill -0 "$(cat "${GATEWAY_PID_FILE}")" 2>/dev/null; then
+      echo "[entrypoint] gateway process exited early — last log lines:"
+      tail -n 80 "${GATEWAY_LOG}" 2>/dev/null || true
+      break
+    fi
+  done
+  if [ "${API_READY}" = "1" ]; then
+    grep -Ei "API [Ss]erver" "${GATEWAY_LOG}" | tail -n 8 || true
   else
-    echo "[entrypoint] gateway started; API Server line not yet in log (check ${GATEWAY_LOG})"
+    echo "[entrypoint] API Server not detected after wait — last gateway log lines:"
+    tail -n 80 "${GATEWAY_LOG}" 2>/dev/null || true
   fi
 fi
 
