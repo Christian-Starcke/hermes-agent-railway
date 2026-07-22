@@ -75,12 +75,45 @@ _config_provider_cache: tuple[float, str | None] | None = None
 _oauth_cache: tuple[float, float, bool] | None = None
 
 
+def _public_api_key(request: Request) -> str | None:
+    """API key from public request.
+
+    Railway's edge (hikari) often blocks inbound ``Authorization: Bearer``.
+    Prefer ``X-Hermes-API-Key`` on the public face; still accept Bearer when
+    the edge allows it (local/dev).
+    """
+    custom = (request.headers.get("x-hermes-api-key") or "").strip()
+    if custom:
+        return custom
+    auth = (request.headers.get("authorization") or "").strip()
+    if auth.lower().startswith("bearer "):
+        token = auth[7:].strip()
+        return token or None
+    return None
+
+
+# Public mount for the API server. Railway's edge blocks bare `/v1/*` on this
+# host; Orchestrator points HERMES_API_URL at `https://<host>/hapi`.
+API_PUBLIC_PREFIX = "/hapi"
+
+
+def _api_upstream_path(path: str, bare_path: str) -> str:
+    """Map public path → API-server path (strip `/hapi` mount when present)."""
+    if bare_path == API_PUBLIC_PREFIX or bare_path.startswith(API_PUBLIC_PREFIX + "/"):
+        stripped = bare_path[len(API_PUBLIC_PREFIX) :] or "/"
+        if "?" in path:
+            return stripped + "?" + path.split("?", 1)[1]
+        return stripped
+    return path
+
+
 def _wants_api_server(request: Request, bare_path: str) -> bool:
-    """Route OpenAI `/v1/*` and Bearer-authed session/job APIs to the API server."""
+    """Route `/hapi/*`, OpenAI `/v1/*`, and authed session/job APIs to API server."""
+    if bare_path == API_PUBLIC_PREFIX or bare_path.startswith(API_PUBLIC_PREFIX + "/"):
+        return True
     if bare_path == "/v1" or bare_path.startswith("/v1/"):
         return True
-    auth = (request.headers.get("authorization") or "").strip().lower()
-    if not auth.startswith("bearer "):
+    if not _public_api_key(request):
         return False
     return (
         bare_path == "/api/sessions"
@@ -256,6 +289,15 @@ async def _proxy_to_api_server(request: Request, path: str) -> Response:
         upstream_port=API_SERVER_PORT,
         forwarded_prefix=None,
     )
+    # Drop public-only header; inject Bearer for loopback API server.
+    upstream_headers = {
+        k: v
+        for k, v in upstream_headers.items()
+        if k.lower() not in ("authorization", "x-hermes-api-key")
+    }
+    api_key = _public_api_key(request)
+    if api_key:
+        upstream_headers["authorization"] = f"Bearer {api_key}"
     body = await request.body()
     try:
         req = client.build_request(
@@ -295,7 +337,9 @@ async def http_proxy(request: Request) -> Response:
         path = f"{path}?{request.url.query}"
 
     if _wants_api_server(request, bare_path):
-        return await _proxy_to_api_server(request, path)
+        return await _proxy_to_api_server(
+            request, _api_upstream_path(path, bare_path)
+        )
 
     client = await _ensure_client()
     upstream_headers = _filter_request_headers(request.headers)
