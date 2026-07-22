@@ -93,13 +93,13 @@ def _public_api_key(request: Request) -> str | None:
 
 
 # Public mount for the API server.
-# Railway hikari on this host empty-403s bare `/v1/*`, `/hapi/*`, and can
-# blackhole a mount after repeated 502s. Default `/orch`; Orchestrator sets
-# HERMES_API_URL=https://<host>/orch.
-API_PUBLIC_PREFIX = (os.environ.get("API_PUBLIC_PREFIX") or "/orch").strip() or "/orch"
+# Railway hikari on this host empty-403s bare `/v1/*` and blackholes mounts
+# after repeated 502/503s (/hapi, /xapi, /orch). Default `/hm`. Orchestrator:
+# HERMES_API_URL=https://<host>/hm
+API_PUBLIC_PREFIX = (os.environ.get("API_PUBLIC_PREFIX") or "/hm").strip() or "/hm"
 if not API_PUBLIC_PREFIX.startswith("/"):
     API_PUBLIC_PREFIX = "/" + API_PUBLIC_PREFIX
-API_PUBLIC_PREFIX = API_PUBLIC_PREFIX.rstrip("/") or "/orch"
+API_PUBLIC_PREFIX = API_PUBLIC_PREFIX.rstrip("/") or "/hm"
 
 # Friendly public paths under the mount → API-server paths (avoids edge-blocked
 # shapes like bare `/v1/...` when clients call `{mount}/models`).
@@ -115,12 +115,19 @@ def _api_upstream_path(path: str, bare_path: str) -> str:
     if "?" in path:
         _, query = path.split("?", 1)
         query = "?" + query
-    for prefix in (API_PUBLIC_PREFIX, "/hapi", "/xapi"):
+    for prefix in (API_PUBLIC_PREFIX, "/hapi", "/xapi", "/orch"):
         if bare_path == prefix or bare_path.startswith(prefix + "/"):
             stripped = bare_path[len(prefix) :] or "/"
             stripped = _API_MOUNT_ALIASES.get(stripped, stripped)
             return stripped + query
     return (bare_path + query) if bare_path else path
+
+
+def _is_api_mount(bare_path: str) -> bool:
+    for prefix in (API_PUBLIC_PREFIX, "/hapi", "/xapi", "/orch"):
+        if bare_path == prefix or bare_path.startswith(prefix + "/"):
+            return True
+    return False
 
 
 def _wants_api_server(request: Request, bare_path: str) -> bool:
@@ -129,14 +136,10 @@ def _wants_api_server(request: Request, bare_path: str) -> bool:
     Do not steal bare `/api/sessions` from WebUI — that path is cookie-auth and
     also gets edge-blocked when we 502 from a down API server. Orchestrator
     always uses `{HERMES_API_URL}/api/sessions` with HERMES_API_URL ending in
-    the mount (e.g. `/orch`).
+    the mount (e.g. `/hm`).
     """
     del request
-    if bare_path == API_PUBLIC_PREFIX or bare_path.startswith(API_PUBLIC_PREFIX + "/"):
-        return True
-    if bare_path == "/hapi" or bare_path.startswith("/hapi/"):
-        return True
-    if bare_path == "/xapi" or bare_path.startswith("/xapi/"):
+    if _is_api_mount(bare_path):
         return True
     # Bare /v1 is edge-blocked on this host; keep mapping for local/dev only.
     if bare_path == "/v1" or bare_path.startswith("/v1/"):
@@ -302,6 +305,33 @@ async def _ensure_api_client() -> httpx.AsyncClient:
 
 
 async def _proxy_to_api_server(request: Request, path: str) -> Response:
+    bare_upstream = path.split("?", 1)[0]
+    # Never 5xx the mount health path — Railway hikari blackholes mounts after
+    # repeated upstream failures. Return 200 with a clear payload instead.
+    if request.method in ("GET", "HEAD") and bare_upstream in ("/health", "/"):
+        try:
+            client = await _ensure_api_client()
+            upstream = await client.get(path, timeout=2.0)
+            if upstream.status_code < 500:
+                return Response(
+                    content=upstream.content,
+                    status_code=upstream.status_code,
+                    media_type=upstream.headers.get("content-type") or "application/json",
+                )
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.HTTPError):
+            pass
+        return Response(
+            content=json.dumps(
+                {
+                    "status": "starting",
+                    "service": "hermes-api-mount",
+                    "detail": "API server not ready yet",
+                }
+            ),
+            status_code=200,
+            media_type="application/json",
+        )
+
     client = await _ensure_api_client()
     upstream_headers = filter_upstream_request_headers(
         request.headers,
@@ -328,8 +358,7 @@ async def _proxy_to_api_server(request: Request, path: str) -> Response:
         )
         upstream = await client.send(req, stream=True)
     except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout):
-        # Prefer 503 over 502: Railway hikari has blackholed mounts (/hapi, /xapi)
-        # after repeated 502s from this proxy when the gateway was still starting.
+        # Prefer 503 over 502 for non-health routes. Health never reaches here.
         return Response(
             "Hermes API server unavailable. Ensure API_SERVER_ENABLED=true and the gateway is running.",
             status_code=503,
