@@ -50,11 +50,45 @@ WEBUI_PORT = _webui_listen_port(os.environ.get("HERMES_WEBUI_PORT"))
 WEBUI_BASE_URL = f"http://{WEBUI_HOST}:{WEBUI_PORT}"
 WEBUI_WS_BASE = f"ws://{WEBUI_HOST}:{WEBUI_PORT}"
 
+# Hermes OpenAI-compatible API server (started by `hermes gateway` when
+# API_SERVER_ENABLED=true). Bound on loopback by default; this wrapper exposes
+# selected routes on the public Railway PORT so Orchestrator / Open WebUI can
+# call Bearer-auth endpoints without a separate TCP proxy.
+def _api_listen_port(raw: str | None, default: int = 8642) -> int:
+    if not raw:
+        return default
+    try:
+        p = int(str(raw).strip(), 10)
+        return p if 1 <= p <= 65535 else default
+    except ValueError:
+        return default
+
+
+API_SERVER_HOST = (os.environ.get("API_SERVER_PROXY_HOST") or "127.0.0.1").strip() or "127.0.0.1"
+API_SERVER_PORT = _api_listen_port(os.environ.get("API_SERVER_PORT"))
+API_SERVER_BASE_URL = f"http://{API_SERVER_HOST}:{API_SERVER_PORT}"
+
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", "/data"))
 CONFIG_PATH = HERMES_HOME / "config.yaml"
 AUTH_PATH = HERMES_HOME / "auth.json"
 _config_provider_cache: tuple[float, str | None] | None = None
 _oauth_cache: tuple[float, float, bool] | None = None
+
+
+def _wants_api_server(request: Request, bare_path: str) -> bool:
+    """Route OpenAI `/v1/*` and Bearer-authed session/job APIs to the API server."""
+    if bare_path == "/v1" or bare_path.startswith("/v1/"):
+        return True
+    auth = (request.headers.get("authorization") or "").strip().lower()
+    if not auth.startswith("bearer "):
+        return False
+    return (
+        bare_path == "/api/sessions"
+        or bare_path.startswith("/api/sessions/")
+        or bare_path == "/api/jobs"
+        or bare_path.startswith("/api/jobs/")
+        or bare_path == "/health/detailed"
+    )
 
 
 def _oauth_configured() -> bool:
@@ -158,6 +192,7 @@ PROXY_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
 
 _client: httpx.AsyncClient | None = None
+_api_client: httpx.AsyncClient | None = None
 
 
 def filter_upstream_request_headers(
@@ -202,12 +237,65 @@ async def _ensure_client() -> httpx.AsyncClient:
     return _client
 
 
+async def _ensure_api_client() -> httpx.AsyncClient:
+    global _api_client
+    if _api_client is None:
+        _api_client = httpx.AsyncClient(
+            base_url=API_SERVER_BASE_URL,
+            timeout=httpx.Timeout(connect=5.0, read=None, write=None, pool=5.0),
+            follow_redirects=False,
+        )
+    return _api_client
+
+
+async def _proxy_to_api_server(request: Request, path: str) -> Response:
+    client = await _ensure_api_client()
+    upstream_headers = filter_upstream_request_headers(
+        request.headers,
+        upstream_host=API_SERVER_HOST,
+        upstream_port=API_SERVER_PORT,
+        forwarded_prefix=None,
+    )
+    body = await request.body()
+    try:
+        req = client.build_request(
+            request.method,
+            path,
+            headers=upstream_headers,
+            content=body if body else None,
+        )
+        upstream = await client.send(req, stream=True)
+    except httpx.ConnectError:
+        return Response(
+            "Hermes API server unavailable. Ensure API_SERVER_ENABLED=true and the gateway is running.",
+            status_code=502,
+            media_type="text/plain",
+        )
+
+    async def body_iter():
+        try:
+            async for chunk in upstream.aiter_raw():
+                yield chunk
+        finally:
+            await upstream.aclose()
+
+    return StreamingResponse(
+        body_iter(),
+        status_code=upstream.status_code,
+        headers=dict(_filter_response_headers(upstream.headers)),
+        media_type=upstream.headers.get("content-type"),
+    )
+
+
 async def http_proxy(request: Request) -> Response:
     raw_path = request.path_params.get("path", "")
     path = "/" + raw_path if not raw_path.startswith("/") else raw_path
     bare_path = path.split("?", 1)[0]
     if request.url.query:
         path = f"{path}?{request.url.query}"
+
+    if _wants_api_server(request, bare_path):
+        return await _proxy_to_api_server(request, path)
 
     client = await _ensure_client()
     upstream_headers = _filter_request_headers(request.headers)

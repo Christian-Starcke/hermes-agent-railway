@@ -503,9 +503,49 @@ export HERMES_WEBUI_STATE_DIR="${HERMES_HOME}/.hermes/webui"
 # Point hermes-webui at our Hermes Agent install so agent features work
 export HERMES_WEBUI_AGENT_DIR="/opt/hermes"
 
+# Persist API server settings into Hermes .env so `hermes gateway` always sees
+# them (Railway service env alone is not always enough after profile/.env load).
+# Public exposure is via admin/proxy.py → loopback API_SERVER_PORT (default 8642).
+if [ -n "${API_SERVER_ENABLED:-}" ] || [ -n "${API_SERVER_KEY:-}" ]; then
+  # Prefer loopback bind; the Starlette wrapper proxies /v1 and Bearer /api/sessions.
+  export API_SERVER_HOST="${API_SERVER_HOST:-127.0.0.1}"
+  export API_SERVER_PORT="${API_SERVER_PORT:-8642}"
+  python3 - <<'PY' || true
+import os
+from pathlib import Path
+
+home = Path(os.environ.get("HERMES_HOME", "/data"))
+env_path = home / ".env"
+keys = (
+    "API_SERVER_ENABLED",
+    "API_SERVER_KEY",
+    "API_SERVER_HOST",
+    "API_SERVER_PORT",
+    "API_SERVER_CORS_ORIGINS",
+    "API_SERVER_MODEL_NAME",
+)
+existing: dict[str, str] = {}
+if env_path.is_file():
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        if not line or line.lstrip().startswith("#") or "=" not in line:
+            continue
+        k, _, v = line.partition("=")
+        existing[k.strip()] = v
+for key in keys:
+    val = os.environ.get(key)
+    if val is not None and str(val).strip() != "":
+        existing[key] = str(val)
+# Keep unrelated keys; rewrite file
+lines = [f"{k}={v}" for k, v in existing.items()]
+env_path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+print(f"[entrypoint] synced API_SERVER_* into {env_path}")
+PY
+fi
+
 # Optional: auto-start the messaging gateway daemon (Telegram/Discord/Slack/email).
 # Default off — users typically configure channel tokens via the WebUI Settings
 # panel first, then redeploy with START_GATEWAY=true.
+# Also required for Hermes API_SERVER (OpenAI-compatible + /api/sessions REST).
 if [ "${START_GATEWAY:-false}" = "true" ]; then
   GATEWAY_LOG="${HERMES_HOME}/logs/gateway.log"
   GATEWAY_PID_FILE="${HERMES_HOME}/gateway.pid"
@@ -520,6 +560,13 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
   fi
   echo $! > "${GATEWAY_PID_FILE}"
   echo "Gateway PID: $(cat "${GATEWAY_PID_FILE}") (logs at ${GATEWAY_LOG})"
+  # Brief wait + tip so deploy logs show whether API server came up
+  sleep 2
+  if grep -q "API Server" "${GATEWAY_LOG}" 2>/dev/null; then
+    grep "API Server" "${GATEWAY_LOG}" | tail -n 5 || true
+  else
+    echo "[entrypoint] gateway started; API Server line not yet in log (check ${GATEWAY_LOG})"
+  fi
 fi
 
 WEBUI_LOG="${HERMES_HOME}/logs/webui.log"
