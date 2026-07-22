@@ -29,7 +29,7 @@ from pathlib import Path
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, RedirectResponse
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.routing import Mount, Route, WebSocketRoute
 
 from . import proxy as hermes_proxy
@@ -38,6 +38,15 @@ from .dashboard_proxy import DASHBOARD_MOUNT_PREFIX, build_dashboard_starlette_a
 
 
 TEMPLATE_PATH = Path(__file__).parent / "templates" / "tui.html"
+
+
+async def proxy_health(_request: Request) -> JSONResponse:
+    """Railway healthcheck target — must not depend on WebUI/API being ready.
+
+    Upstream Hermes details live at ``/orch/health`` (API mount). Blocking the
+    public port on gateway readiness previously failed Railway's 90s window.
+    """
+    return JSONResponse({"status": "ok", "service": "hermes-railway-proxy"})
 
 
 async def _is_authenticated(request: Request) -> bool:
@@ -69,6 +78,7 @@ async def tui_page(request: Request):
 
 
 routes = [
+    Route("/health", proxy_health, methods=["GET", "HEAD"]),
     Route("/tui", tui_page, methods=["GET"]),
     WebSocketRoute("/tui/ws/auth/{provider}", hermes_terminal.login_ws),
     WebSocketRoute("/tui/ws/shell", hermes_terminal.shell_ws),
