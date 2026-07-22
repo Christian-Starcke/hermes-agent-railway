@@ -92,10 +92,10 @@ def _public_api_key(request: Request) -> str | None:
     return None
 
 
-# Public mount for the API server.
-# Railway hikari on this host empty-403s bare `/v1/*` and blackholes mounts
-# after repeated 502/503s (/hapi, /xapi, /orch). Default `/hm`. Orchestrator:
-# HERMES_API_URL=https://<host>/hm
+# Public mount for the API server (Orchestrator: HERMES_API_URL=…/hm).
+# Railway hikari empty-403s bare `/v1/*` and blackholes mounts after repeated
+# 502/503s (/hapi, /xapi, /orch). Authenticated routes use minimal loopback
+# headers + process-env API_SERVER_KEY (see _proxy_to_api_server).
 API_PUBLIC_PREFIX = (os.environ.get("API_PUBLIC_PREFIX") or "/hm").strip() or "/hm"
 if not API_PUBLIC_PREFIX.startswith("/"):
     API_PUBLIC_PREFIX = "/" + API_PUBLIC_PREFIX
