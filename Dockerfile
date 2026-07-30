@@ -48,8 +48,17 @@ RUN set -eux; \
 
 ENV npm_config_install_links=false
 
+# Playwright may be absent or engine-mismatched on interim Hermes SHAs (post-release
+# pins for API features). Prefer local binary; otherwise try npx package; never fail
+# the image build — API server / model picker do not require Chromium.
 RUN npm install --prefer-offline --no-audit && \
-    npx playwright install --with-deps chromium --only-shell && \
+    ( \
+      if [ -x node_modules/.bin/playwright ]; then \
+        ./node_modules/.bin/playwright install --with-deps chromium --only-shell; \
+      else \
+        npx --yes playwright install --with-deps chromium --only-shell; \
+      fi \
+    ) || echo "[build] playwright browser install skipped" && \
     npm cache clean --force
 
 RUN uv venv && \
