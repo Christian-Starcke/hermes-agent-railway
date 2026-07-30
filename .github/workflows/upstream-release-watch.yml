@@ -56,19 +56,23 @@ jobs:
           latest_webui = os.environ["LATEST_WEBUI"]
           latest_agent = os.environ["LATEST_AGENT"]
           force = os.environ.get("FORCE", "false") == "true"
+          agent_hold = bool(lock.get("hermes_agent_hold"))
 
           print(f"Locked webui: {lock.get('hermes_webui')} -> latest {latest_webui}")
           print(f"Locked agent: {lock.get('hermes_agent')} -> latest {latest_agent}")
+          print(f"Agent hold: {agent_hold}")
 
-          changed = force or (
-              lock.get("hermes_webui") != latest_webui
-              or lock.get("hermes_agent") != latest_agent
-          )
-          print(f"Changed: {changed}")
+          webui_changed = lock.get("hermes_webui") != latest_webui
+          # Manual SHA/pre-release pins must not be overwritten by the latest release tag.
+          agent_changed = (not agent_hold) and (lock.get("hermes_agent") != latest_agent)
+          # force redeploy rebuilds the image but must not clear a manual agent hold
+          changed = force or webui_changed or agent_changed
+          print(f"Changed: {changed} (webui={webui_changed}, agent={agent_changed}, force={force})")
 
           if changed:
               lock["hermes_webui"] = latest_webui
-              lock["hermes_agent"] = latest_agent
+              if not agent_hold:
+                  lock["hermes_agent"] = latest_agent
               lock["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
               with open("versions.lock.json", "w", encoding="utf-8") as f:
                   json.dump(lock, f, indent=2)
