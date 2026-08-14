@@ -1,8 +1,8 @@
 {
-  "hermes_webui": "v0.52.106",
+  "hermes_webui": "v0.52.113",
   "hermes_agent": "4a9447c726987856b0160d97717ddc78d8076d2b",
   "hermes_agent_hold": true,
   "opencode_telegram_bot": "0.22.1",
-  "updated_at": "2026-07-30T19:28:00Z",
+  "updated_at": "2026-08-14T07:23:33Z",
   "note": "hermes_agent pinned to NousResearch/hermes-agent@4a9447c7 (post-v0.19.0) for GET /api/model/options. hermes_agent_hold=true prevents upstream-release-watch from downgrading to latest GitHub release. Clear hold when Nous ships a release that includes that route. hermes_webui still auto-bumps."
 }
