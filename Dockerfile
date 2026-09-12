@@ -61,7 +61,16 @@ RUN npm install --prefer-offline --no-audit && \
     ) || echo "[build] playwright browser install skipped" && \
     npm cache clean --force
 
-RUN uv venv && \
+# UV_PYTHON pins the interpreter explicitly: upstream hermes-agent ships a
+# `.python-version` file (3.11). Without this pin, `uv venv` honors it and
+# downloads a managed CPython 3.11 into /root/.local/share/uv/python — a path
+# the runtime `hermes` user cannot traverse (root-only /root). The venv's
+# python symlink then dead-ends for gosu hermes, PATH falls through to system
+# python3, and the entrypoint crashes with "No module named uvicorn".
+# Forcing UV_PYTHON=3.13 keeps the venv on the system interpreter.
+ENV UV_PYTHON=3.13
+
+RUN uv venv --python 3.13 && \
     uv pip install --no-cache-dir -e ".[all,messaging]"
 
 RUN chmod -R a+rX /opt/hermes
