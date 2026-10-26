@@ -167,7 +167,7 @@ Open `http://localhost:8080` and enter `changeme` at the password prompt.
 - Web UI: `/`
 - **Official Hermes CLI dashboard:** **`/hermes-dashboard`** (configure with **`HERMES_DASHBOARD_MOUNT_PATH`**) — after **`hermes dashboard --no-open`** runs on **`127.0.0.1:9119`** (usually from **`/tui`**). If the process isn’t listening, open this path and you’ll get **502** with hints.
 - Web terminal (OAuth shortcuts + shell): `/tui`
-- Health check: `/health` — proxy liveness when the gateway is disabled; gateway API readiness when `START_GATEWAY=true`. The image uses Python 3.14, required by current Hermes core dependencies.
+- Health check: `/health` — proxy liveness when the gateway is disabled; gateway API readiness when `START_GATEWAY=true`. The image uses Python 3.14 and Node.js 24 LTS, required by current Hermes dependencies and browser tooling.
 - Gateway log (when `START_GATEWAY=true`): `/data/logs/gateway.log`
 - Gateway PID file: `/data/gateway.pid`
 - WebUI internal log: `/data/logs/webui.log`

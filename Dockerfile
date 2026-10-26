@@ -4,6 +4,7 @@ FROM ghcr.io/astral-sh/uv:0.11.6-python3.14-trixie
 # Override at build time with --build-arg if needed.
 ARG HERMES_REF
 ARG HERMES_WEBUI_REF
+ARG NPM_VERSION=11.17.0
 
 ENV PYTHONUNBUFFERED=1 \
     PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright \
@@ -12,6 +13,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH="/opt/hermes-railway:/opt/hermes:/opt/hermes-webui"
 
 RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt-get install -y --no-install-recommends \
       build-essential \
       ca-certificates \
@@ -23,13 +26,15 @@ RUN apt-get update && \
       gosu \
       libffi-dev \
       nodejs \
-      npm \
       openssh-client \
       procps \
       python3 \
       python3-dev \
       ripgrep \
       tini && \
+    npm install -g "npm@${NPM_VERSION}" && \
+    node --version && \
+    npm --version && \
     rm -rf /var/lib/apt/lists/*
 
 RUN useradd --system --uid 10000 --create-home --home-dir /home/hermes --shell /bin/bash hermes
@@ -48,9 +53,8 @@ RUN set -eux; \
 
 ENV npm_config_install_links=false
 
-# Playwright may be absent or engine-mismatched on interim Hermes SHAs (post-release
-# pins for API features). Prefer local binary; otherwise try npx package; never fail
-# the image build — API server / model picker do not require Chromium.
+# Browser tools require a working Chromium installation. Fail the build rather
+# than silently shipping an image without Playwright.
 RUN npm install --prefer-offline --no-audit && \
     ( \
       if [ -x node_modules/.bin/playwright ]; then \
@@ -58,7 +62,9 @@ RUN npm install --prefer-offline --no-audit && \
       else \
         npx --yes playwright install --with-deps chromium --only-shell; \
       fi \
-    ) || echo "[build] playwright browser install skipped" && \
+    ) && \
+    npx --yes playwright --version && \
+    test -d "${PLAYWRIGHT_BROWSERS_PATH}" && \
     npm cache clean --force
 
 # Pin the interpreter explicitly so uv does not honor an upstream

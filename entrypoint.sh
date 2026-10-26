@@ -58,8 +58,13 @@ if [ "${WORKSPACE_BOOTSTRAP:-}" = "true" ] || [ -n "${GIT_REPO_N8N:-}" ]; then
   export WORKSPACE_BOOTSTRAP="${WORKSPACE_BOOTSTRAP:-true}"
   export WORKSPACE_BOOTSTRAP_PREFIX="[hermes-bootstrap]"
   if [ -f "/opt/hermes-railway/scripts/prism-workspace-bootstrap.sh" ]; then
-    bash /opt/hermes-railway/scripts/prism-workspace-bootstrap.sh || \
-      echo "[entrypoint] prism workspace bootstrap failed (non-fatal)"
+    if [ "$(id -u)" = "0" ]; then
+      gosu hermes bash /opt/hermes-railway/scripts/prism-workspace-bootstrap.sh || \
+        echo "[entrypoint] prism workspace bootstrap failed (non-fatal)"
+    else
+      bash /opt/hermes-railway/scripts/prism-workspace-bootstrap.sh || \
+        echo "[entrypoint] prism workspace bootstrap failed (non-fatal)"
+    fi
   fi
 fi
 
