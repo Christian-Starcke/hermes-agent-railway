@@ -175,6 +175,20 @@ Open `http://localhost:8080` and enter `changeme` at the password prompt.
 - Hermes config: `/data/config.yaml`
 - Hermes env: `/data/.env`
 
+### Autonomous storage maintenance
+
+`opencode-volume-maintain.sh` runs once at boot and then daily (`86400` seconds). It is deliberately limited to disposable data:
+
+- Removes npm `_cacache` and uv download caches.
+- Removes `_npx` environments older than 14 days; recent ones stay available.
+- Deletes rotated logs (`.log.N`, `.log.prev`, `.log.old`) older than 14 days.
+- Truncates active `.log` files over 50 MiB to their last 10 MiB without replacing the file inode, so running writers keep logging.
+- Logs a warning when `/data` reaches 85% usage.
+
+Workspaces, workspace `node_modules`, installed npm-global tools, sessions, configuration, and backups are never deleted by this job. Maintenance output goes to `/data/logs/volume-maintain.log`.
+
+Run a pass manually with `bash /opt/hermes-railway/scripts/opencode-volume-maintain.sh`. Optional overrides: `OPENCODE_VOLUME_MAINTAIN_INTERVAL_SEC`, `OPENCODE_VOLUME_WARN_THRESHOLD_PCT`, `OPENCODE_NPX_MAX_AGE_DAYS`, `OPENCODE_LOG_MAX_AGE_DAYS`, `OPENCODE_LOG_MAX_BYTES`, and `OPENCODE_LOG_TAIL_BYTES`.
+
 ### How `/tui` works
 
 `/tui` is a two-pane web terminal: a left rail of preset buttons (OAuth login, status commands, file viewers, "Open shell") and a right pane with xterm.js. Behind it are two WebSocket modes:

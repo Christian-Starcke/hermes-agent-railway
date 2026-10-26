@@ -69,7 +69,7 @@ Upstream Docker images run `tools/skills_sync.py` from the Hermes install direct
 - Web UI: Hermes WebUI (Python stdlib + vanilla JS, no build step)
 - Browser tooling: Playwright Chromium (agent-side, used when Hermes invokes the browser tool)
 - Health check: `/health` (includes gateway API readiness when `START_GATEWAY=true`)
-- Volume: `/data`
+- Volume: `/data`, with startup and daily retention for disposable caches and logs (workspaces and backups excluded)
 
 ### Implementation Details
 

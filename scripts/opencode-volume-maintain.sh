@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Idempotent OpenCode /data volume maintenance. Safe on boot and on schedule.
+# Conservative /data maintenance. Safe on boot and on a daily schedule.
+# Only disposable caches and logs are pruned; user data is never removed.
 set -uo pipefail
 
 DATA_ROOT="${RAILWAY_VOLUME_MOUNT_PATH:-/data}"
 LOG_FILE="${DATA_ROOT}/logs/volume-maintain.log"
 WARN_PCT="${OPENCODE_VOLUME_WARN_THRESHOLD_PCT:-85}"
-NODE_MAX_AGE_DAYS="${OPENCODE_NODE_MODULES_MAX_AGE_DAYS:-14}"
-LAZY_MAX_AGE_DAYS="${OPENCODE_LAZY_REPO_MAX_AGE_DAYS:-7}"
-WORKSPACE="${OPENCODE_WORKSPACE:-${DATA_ROOT}/workspace}"
+LOG_MAX_AGE_DAYS="${OPENCODE_LOG_MAX_AGE_DAYS:-14}"
+LOG_MAX_BYTES="${OPENCODE_LOG_MAX_BYTES:-52428800}"
+LOG_TAIL_BYTES="${OPENCODE_LOG_TAIL_BYTES:-10485760}"
+NPX_MAX_AGE_DAYS="${OPENCODE_NPX_MAX_AGE_DAYS:-14}"
 PREFIX="[volume-maintain]"
 
 mkdir -p "${DATA_ROOT}/logs"
@@ -18,13 +20,10 @@ log() {
   echo "$line" >> "${LOG_FILE}"
 }
 
-rotate_log() {
-  if [ -f "${LOG_FILE}" ]; then
-    local size
-    size="$(wc -c < "${LOG_FILE}" 2>/dev/null || echo 0)"
-    if [ "${size}" -gt 1048576 ]; then
-      tail -n 500 "${LOG_FILE}" > "${LOG_FILE}.tmp" && mv "${LOG_FILE}.tmp" "${LOG_FILE}"
-    fi
+trim_maintenance_log() {
+  if [ -f "${LOG_FILE}" ] && [ "$(wc -c < "${LOG_FILE}" 2>/dev/null || echo 0)" -gt 1048576 ]; then
+    tail -n 500 "${LOG_FILE}" > "${LOG_FILE}.tmp" && cat "${LOG_FILE}.tmp" > "${LOG_FILE}"
+    rm -f "${LOG_FILE}.tmp"
   fi
 }
 
@@ -32,76 +31,65 @@ usage_pct() {
   df -P "${DATA_ROOT}" 2>/dev/null | awk 'NR==2 {gsub(/%/,"",$5); print $5}' || echo 0
 }
 
-prune_npm_caches() {
-  # Aggressive only: prune npm download caches. Never delete _npx on normal boots — MCP servers depend on it.
-  rm -rf \
-    "${DATA_ROOT}/.npm-cache/_cacache" \
-    "${DATA_ROOT}/.npm-global/.npm/_cacache" \
-    "${DATA_ROOT}/.npm/_cacache" \
-    /root/.npm/_cacache 2>/dev/null || true
-}
-
-prune_npx_caches() {
-  # Last resort when disk is nearly full — MCP bootstrap will re-warm on next boot.
-  rm -rf "${DATA_ROOT}/.npm-cache/_npx" 2>/dev/null || true
-}
-
-prune_node_modules() {
-  local max_age_days="$1"
-  local aggressive="$2"
-  if [ ! -d "${WORKSPACE}" ]; then
-    return 0
+remove_tree() {
+  if [ -e "$1" ]; then
+    rm -rf -- "$1"
+    log "removed disposable cache $1"
   fi
-  if [ "${aggressive}" = "1" ]; then
-    find "${WORKSPACE}" -name node_modules -type d -prune -exec rm -rf {} + 2>/dev/null || true
-    return 0
-  fi
-  find "${WORKSPACE}" -name node_modules -type d -prune -mtime "+${max_age_days}" -exec rm -rf {} + 2>/dev/null || true
 }
 
-prune_lazy_repos() {
-  local max_age_days="$1"
-  local org="${WORKSPACE}/prism-platform-ap"
-  for name in prism-playbook prism-knowledge; do
-    local path="${org}/${name}"
-    if [ -d "${path}" ] && [ ! -L "${path}" ]; then
-      if find "${path}" -maxdepth 0 -mtime "+${max_age_days}" | grep -q .; then
-        log "removing idle lazy repo ${path}"
-        rm -rf "${path}"
-      fi
+prune_caches() {
+  # Download caches are always reconstructible. Installed npm-global tools and
+  # workspace node_modules are deliberately not included.
+  remove_tree "${DATA_ROOT}/home/.npm/_cacache"
+  remove_tree "${DATA_ROOT}/home/.cache/uv"
+  remove_tree "${DATA_ROOT}/.npm-cache/_cacache"
+  remove_tree "${DATA_ROOT}/.npm-global/.npm/_cacache"
+  remove_tree "${DATA_ROOT}/.npm/_cacache"
+  remove_tree /root/.npm/_cacache
+
+  # npx environments can be re-created, but avoid removing recently used ones.
+  local root
+  for root in "${DATA_ROOT}/home/.npm/_npx" "${DATA_ROOT}/.npm-cache/_npx"; do
+    if [ -d "${root}" ]; then
+      find "${root}" -mindepth 1 -maxdepth 1 -type d -mtime "+${NPX_MAX_AGE_DAYS}" \
+        -exec rm -rf -- {} + 2>/dev/null || true
     fi
   done
 }
 
-git_gc_workspace() {
-  if [ ! -d "${WORKSPACE}" ]; then
-    return 0
-  fi
-  while IFS= read -r gitdir; do
-    git -C "$(dirname "${gitdir}")" gc --prune=now 2>/dev/null || true
-  done < <(find "${WORKSPACE}" -name .git -type d 2>/dev/null)
+prune_rotated_logs() {
+  find "${DATA_ROOT}/logs" -maxdepth 1 -type f \
+    \( -name '*.log.[0-9]*' -o -name '*.log.prev' -o -name '*.log.old' \) \
+    -mtime "+${LOG_MAX_AGE_DAYS}" -delete 2>/dev/null || true
 }
 
-rotate_log
+truncate_large_logs() {
+  # Keep the inode: running processes continue writing to the same file.
+  # The last LOG_TAIL_BYTES are preserved for diagnostics.
+  find "${DATA_ROOT}/logs" -maxdepth 1 -type f -name '*.log' \
+    -size "+${LOG_MAX_BYTES}c" -print0 2>/dev/null |
+  while IFS= read -r -d '' file; do
+    local tmp="${file}.maintain.tmp"
+    if tail -c "${LOG_TAIL_BYTES}" "${file}" > "${tmp}"; then
+      cat "${tmp}" > "${file}" && log "truncated ${file} to ${LOG_TAIL_BYTES} bytes"
+    fi
+    rm -f "${tmp}"
+  done
+}
+
+trim_maintenance_log
 log "starting maintenance"
 log "$(df -h "${DATA_ROOT}" 2>/dev/null | tail -1)"
 
 pct="$(usage_pct)"
-aggressive=0
 if [ "${pct}" -ge "${WARN_PCT}" ] 2>/dev/null; then
-  aggressive=1
-  log "WARN disk at ${pct}% (threshold ${WARN_PCT}%) — aggressive prune"
+  log "WARN disk at ${pct}% (threshold ${WARN_PCT}%)"
 fi
 
-if [ "${aggressive}" = "1" ]; then
-  prune_npm_caches
-  prune_npx_caches
-  prune_node_modules 0 1
-  prune_lazy_repos "${LAZY_MAX_AGE_DAYS}"
-else
-  prune_node_modules "${NODE_MAX_AGE_DAYS}" 0
-fi
+prune_caches
+prune_rotated_logs
+truncate_large_logs
 
-git_gc_workspace
 log "done — $(df -h "${DATA_ROOT}" 2>/dev/null | tail -1)"
 exit 0

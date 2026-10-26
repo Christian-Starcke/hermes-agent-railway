@@ -38,6 +38,16 @@ if [ "$(id -u)" = "0" ]; then
   chown -R hermes:hermes "${HERMES_HOME}" 2>/dev/null || true
 fi
 
+# Autonomous storage maintenance: one pass at boot, then daily. This only
+# prunes disposable caches and logs; workspaces, sessions, tools, and backups
+# are explicitly excluded.
+bash /opt/hermes-railway/scripts/opencode-volume-maintain.sh || \
+  echo "[entrypoint] volume maintenance failed (non-fatal)"
+if ! pgrep -f "[o]pencode-volume-maintain-loop.sh" >/dev/null 2>&1; then
+  nohup bash /opt/hermes-railway/opencode-railway/opencode-volume-maintain-loop.sh >/dev/null 2>&1 &
+  echo "[entrypoint] daily volume maintenance scheduled (interval ${OPENCODE_VOLUME_MAINTAIN_INTERVAL_SEC:-86400}s)"
+fi
+
 # Prism org workspace: n8n-as-code at root + prism-platform-ap/* sibling repos.
 if [ "${WORKSPACE_BOOTSTRAP:-}" = "true" ] || [ -n "${GIT_REPO_N8N:-}" ]; then
   export WORKSPACE_ROOT="${HERMES_HOME}/home/workspace"
