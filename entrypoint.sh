@@ -593,9 +593,9 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
   fi
   echo $! > "${GATEWAY_PID_FILE}"
   echo "Gateway launcher PID: $(cat "${GATEWAY_PID_FILE}") (stdout at ${GATEWAY_STDOUT})"
-  # Do NOT block the public PORT on API readiness — Railway healthcheck is
-  # GET /health with a ~90s window. Waiting here previously failed the deploy
-  # even though the API came up (~70s). Probe/restart in the background instead.
+  # Start the public port immediately; /health returns 503 until the gateway
+  # API is ready. Railway retries for 180s, covering normal gateway startup
+  # without making a crashed gateway appear healthy.
   API_PROBE_URL="http://127.0.0.1:${API_SERVER_PORT:-8642}/health"
   API_WAIT_ATTEMPTS="${API_SERVER_WAIT_ATTEMPTS:-90}"  # 90 * 2s = 180s
   (
@@ -629,7 +629,7 @@ if [ "${START_GATEWAY:-false}" = "true" ]; then
     echo "[entrypoint] API server not reachable at ${API_PROBE_URL} after background wait — last stdout lines:"
     tail -n 200 "${GATEWAY_STDOUT}" 2>/dev/null || true
   ) &
-  echo "[entrypoint] gateway API readiness watcher started (pid $!); continuing to WebUI/proxy for Railway /health"
+  echo "[entrypoint] gateway API readiness watcher started (pid $!); Railway /health now waits for gateway readiness"
 fi
 
 WEBUI_LOG="${HERMES_HOME}/logs/webui.log"

@@ -65,10 +65,10 @@ Upstream Docker images run `tools/skills_sync.py` from the Hermes install direct
 
 ### Deployment Dependencies
 
-- Runtime: Python 3.13, Node.js, uv
+- Runtime: Python 3.14, Node.js, uv
 - Web UI: Hermes WebUI (Python stdlib + vanilla JS, no build step)
 - Browser tooling: Playwright Chromium (agent-side, used when Hermes invokes the browser tool)
-- Health check: `/health`
+- Health check: `/health` (includes gateway API readiness when `START_GATEWAY=true`)
 - Volume: `/data`
 
 ### Implementation Details

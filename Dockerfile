@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:0.11.6-python3.13-trixie
+FROM ghcr.io/astral-sh/uv:0.11.6-python3.14-trixie
 
 # Pinned by versions.lock.json (auto-bumped via .github/workflows/upstream-release-watch.yml).
 # Override at build time with --build-arg if needed.
@@ -61,16 +61,13 @@ RUN npm install --prefer-offline --no-audit && \
     ) || echo "[build] playwright browser install skipped" && \
     npm cache clean --force
 
-# UV_PYTHON pins the interpreter explicitly: upstream hermes-agent ships a
-# `.python-version` file (3.11). Without this pin, `uv venv` honors it and
-# downloads a managed CPython 3.11 into /root/.local/share/uv/python — a path
-# the runtime `hermes` user cannot traverse (root-only /root). The venv's
-# python symlink then dead-ends for gosu hermes, PATH falls through to system
-# python3, and the entrypoint crashes with "No module named uvicorn".
-# Forcing UV_PYTHON=3.13 keeps the venv on the system interpreter.
-ENV UV_PYTHON=3.13
+# Pin the interpreter explicitly so uv does not honor an upstream
+# `.python-version` and install a managed Python under root-only /root.
+# Current Hermes releases gate core dependencies on Python 3.14; using an
+# older interpreter silently omits those packages and crashes the gateway.
+ENV UV_PYTHON=3.14
 
-RUN uv venv --python 3.13 && \
+RUN uv venv --python 3.14 && \
     uv pip install --no-cache-dir -e ".[all,messaging]"
 
 RUN chmod -R a+rX /opt/hermes

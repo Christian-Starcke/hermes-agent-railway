@@ -21,7 +21,7 @@ A single password-protected web UI on the Railway public domain ([screenshots](h
 - **Persistent state** on the `/data` volume — config, sessions, skills, workspace, WebUI state
 - **Bundled `searxng-local` skill** so Hermes can query the companion SearXNG service
 - **Official Hermes CLI dashboard** reachable at **`/hermes-dashboard`** on your Railway URL while `hermes dashboard --no-open` runs on loopback inside the container (Hermes SPA expects **`X-Forwarded-Prefix`**; see `admin/dashboard_proxy.py`).
-- **Health check** at `/health` (Railway probe)
+- **Health check** at `/health` (Railway probe; returns 503 until the gateway API is ready when `START_GATEWAY=true`)
 - **Web terminal (`/tui`)** — in-browser xterm with two modes: OAuth shortcut buttons that run `hermes auth add <provider> --type oauth` for ChatGPT (Codex) and Nous Portal device-code flows, plus a free-form `/bin/bash` pane for any other `hermes` CLI command. Useful when you want to use your ChatGPT subscription instead of paying for OpenAI API access, or when you need a shell without SSH access. New sessions automatically inherit the provider you configured (workaround for an upstream hermes-webui bug — see `admin/proxy.py:_active_provider`).
 
 ## Kanban & official dashboard vs Web UI
@@ -167,7 +167,7 @@ Open `http://localhost:8080` and enter `changeme` at the password prompt.
 - Web UI: `/`
 - **Official Hermes CLI dashboard:** **`/hermes-dashboard`** (configure with **`HERMES_DASHBOARD_MOUNT_PATH`**) — after **`hermes dashboard --no-open`** runs on **`127.0.0.1:9119`** (usually from **`/tui`**). If the process isn’t listening, open this path and you’ll get **502** with hints.
 - Web terminal (OAuth shortcuts + shell): `/tui`
-- Health check: `/health`
+- Health check: `/health` — proxy liveness when the gateway is disabled; gateway API readiness when `START_GATEWAY=true`. The image uses Python 3.14, required by current Hermes core dependencies.
 - Gateway log (when `START_GATEWAY=true`): `/data/logs/gateway.log`
 - Gateway PID file: `/data/gateway.pid`
 - WebUI internal log: `/data/logs/webui.log`

@@ -25,6 +25,7 @@ listening it can expose **`.env`** — minimize uptime on public Railway URLs un
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -41,12 +42,31 @@ TEMPLATE_PATH = Path(__file__).parent / "templates" / "tui.html"
 
 
 async def proxy_health(_request: Request) -> JSONResponse:
-    """Railway healthcheck target — must not depend on WebUI/API being ready.
+    """Check proxy liveness and, when enabled, Hermes gateway readiness.
 
-    Upstream Hermes details live at ``/orch/health`` (API mount). Blocking the
-    public port on gateway readiness previously failed Railway's 90s window.
+    Railway retries this endpoint for 180 seconds. Returning 503 until the
+    gateway API is ready prevents a crashed messaging daemon looking healthy.
     """
-    return JSONResponse({"status": "ok", "service": "hermes-railway-proxy"})
+    if os.environ.get("START_GATEWAY") != "true":
+        return JSONResponse({"status": "ok", "service": "hermes-railway-proxy"})
+
+    import httpx
+
+    try:
+        async with httpx.AsyncClient() as client:
+            upstream = await client.get(f"{hermes_proxy.API_SERVER_BASE_URL}/health", timeout=2.0)
+        if upstream.status_code == 200:
+            return JSONResponse(
+                {"status": "ok", "service": "hermes-railway-proxy", "gateway": "ready"}
+            )
+    except httpx.RequestError:
+        pass
+
+    return JSONResponse(
+        {"status": "unavailable", "service": "hermes-railway-proxy", "gateway": "unavailable"},
+        status_code=503,
+        headers={"Retry-After": "5"},
+    )
 
 
 async def _is_authenticated(request: Request) -> bool:
