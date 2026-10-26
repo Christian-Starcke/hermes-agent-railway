@@ -347,41 +347,6 @@ if [ -d "/opt/hermes-railway/skills" ]; then
   done
 fi
 
-if [ -d "/opt/hermes-railway/plugins" ]; then
-  for plugin_dir in /opt/hermes-railway/plugins/*/; do
-    [ -d "${plugin_dir}" ] || continue
-    plugin_name="$(basename "${plugin_dir}")"
-    rm -rf "${HERMES_HOME}/.hermes/plugins/${plugin_name}"
-    cp -R "${plugin_dir}" "${HERMES_HOME}/.hermes/plugins/${plugin_name}"
-    echo "Synced Railway plugin: ${plugin_name}"
-  done
-fi
-
-# Log plugin versions after sync (helps verify deploys).
-if [ -f "${HERMES_HOME}/.hermes/plugins/cursor-cloud/plugin.yaml" ]; then
-  python3 - <<'PY' || true
-import re
-from pathlib import Path
-
-plugin_name = "cursor-cloud"
-plugin_dir = Path("/data/.hermes/plugins") / plugin_name
-yaml_text = (plugin_dir / "plugin.yaml").read_text(encoding="utf-8")
-init_text = (plugin_dir / "__init__.py").read_text(encoding="utf-8")
-version = "unknown"
-for line in yaml_text.splitlines():
-    if line.strip().startswith("version:"):
-        version = line.split(":", 1)[1].strip().strip('"').strip("'")
-        break
-tools = sorted(set(re.findall(r'"cursor_[a-z_]+"', init_text)))
-print(f"[entrypoint] {plugin_name} plugin version={version} tools_registered={len(tools)}")
-PY
-fi
-
-
-# Default webhook URL for Cursor delegations when running on Railway.
-if [ -z "${CURSOR_WEBHOOK_URL:-}" ] && [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
-  export CURSOR_WEBHOOK_URL="https://${RAILWAY_PUBLIC_DOMAIN}/webhooks/cursor"
-fi
 
 python3 - <<'PY' || true
 import os
@@ -398,14 +363,13 @@ if cfg_path.exists():
     except Exception:
         cfg = {}
 
-cursor_configured = bool((os.environ.get("CURSOR_API_KEY") or "").strip())
 
 plugins = cfg.setdefault("plugins", {})
 enabled = plugins.setdefault("enabled", [])
 toolsets = cfg.setdefault("toolsets", [])
 changed = False
 
-for stale_plugin, stale_toolset in (("paperclip", "paperclip"), ("opencode-delegate", "opencode_delegate")):
+for stale_plugin, stale_toolset in (("paperclip", "paperclip"), ("opencode-delegate", "opencode_delegate"), ("cursor-cloud", "cursor_cloud")):
     if stale_plugin in enabled:
         enabled.remove(stale_plugin)
         changed = True
@@ -415,33 +379,11 @@ for stale_plugin, stale_toolset in (("paperclip", "paperclip"), ("opencode-deleg
         changed = True
         print(f"[entrypoint] removed stale {stale_toolset} toolset from config.yaml")
 
-if cursor_configured:
-    if "cursor-cloud" not in enabled:
-        enabled.append("cursor-cloud")
-        changed = True
-        print("[entrypoint] enabled cursor-cloud plugin in config.yaml")
-    if "cursor_cloud" not in toolsets:
-        toolsets.append("cursor_cloud")
-        changed = True
-        print("[entrypoint] enabled cursor_cloud toolset in config.yaml")
 
 if changed:
     cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False))
 PY
 
-CURSOR_POLL_SCRIPT="${HERMES_HOME}/cron/cursor-cloud-poll.sh"
-if [ ! -f "${CURSOR_POLL_SCRIPT}" ]; then
-  cat > "${CURSOR_POLL_SCRIPT}" <<'POLL'
-#!/bin/bash
-set -euo pipefail
-export HERMES_HOME="${HERMES_HOME:-/data}"
-export PATH="/opt/hermes/.venv/bin:/data/.local/bin:${PATH}"
-python3 /data/.hermes/plugins/cursor-cloud/poll_pending.py >> /data/logs/cursor-poll.log 2>&1
-POLL
-  chmod +x "${CURSOR_POLL_SCRIPT}"
-  echo "Installed Cursor poll script at ${CURSOR_POLL_SCRIPT}"
-  echo "Add a Hermes cron job (every 10m) that runs: ${CURSOR_POLL_SCRIPT}"
-fi
 
 
 if [ -z "${ADMIN_PASSWORD:-}" ]; then
