@@ -41,6 +41,10 @@ fi
 # Autonomous storage maintenance: one pass at boot, then daily. This only
 # prunes disposable caches and logs; workspaces, sessions, tools, and backups
 # are explicitly excluded.
+mkdir -p "${HOME}/.hermes/scripts"
+cp -f /opt/hermes-railway/scripts/volume-hygiene.sh "${HOME}/.hermes/scripts/volume-hygiene.sh"
+chmod +x "${HOME}/.hermes/scripts/volume-hygiene.sh"
+
 bash /opt/hermes-railway/scripts/opencode-volume-maintain.sh || \
   echo "[entrypoint] volume maintenance failed (non-fatal)"
 if ! pgrep -f "[o]pencode-volume-maintain-loop.sh" >/dev/null 2>&1; then

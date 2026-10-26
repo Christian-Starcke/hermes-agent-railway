@@ -187,6 +187,8 @@ Open `http://localhost:8080` and enter `changeme` at the password prompt.
 
 Workspaces, workspace `node_modules`, installed npm-global tools, sessions, configuration, and backups are never deleted by this job. Maintenance output goes to `/data/logs/volume-maintain.log`.
 
+The Hermes-native `volume-hygiene` cron job uses `scripts/volume-hygiene.sh`, a thin wrapper around the same policy, with `--no-agent` and local delivery. On this deployment it runs daily at 03:00 UTC; the entrypoint reinstalls the wrapper under `~/.hermes/scripts` on every boot. Inspect or trigger it with `hermes cron list` and `hermes cron run <job-id>`.
+
 Run a pass manually with `bash /opt/hermes-railway/scripts/opencode-volume-maintain.sh`. Optional overrides: `OPENCODE_VOLUME_MAINTAIN_INTERVAL_SEC`, `OPENCODE_VOLUME_WARN_THRESHOLD_PCT`, `OPENCODE_NPX_MAX_AGE_DAYS`, `OPENCODE_LOG_MAX_AGE_DAYS`, `OPENCODE_LOG_MAX_BYTES`, and `OPENCODE_LOG_TAIL_BYTES`.
 
 ### How `/tui` works

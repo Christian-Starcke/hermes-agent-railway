@@ -108,6 +108,7 @@ COPY entrypoint.sh ./entrypoint.sh
 RUN chmod +x \
       /opt/hermes-railway/entrypoint.sh \
       /opt/hermes-railway/scripts/prism-workspace-bootstrap.sh \
+      /opt/hermes-railway/scripts/volume-hygiene.sh \
       /opt/hermes-railway/scripts/opencode-volume-maintain.sh \
       /opt/hermes-railway/scripts/opencode-mcp-bootstrap.sh \
       /opt/hermes-railway/scripts/opencode-workspace-ensure.sh \
