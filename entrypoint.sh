@@ -47,12 +47,12 @@ chmod +x "${HOME}/.hermes/scripts/volume-hygiene.sh"
 
 bash /opt/hermes-railway/scripts/opencode-volume-maintain.sh || \
   echo "[entrypoint] volume maintenance failed (non-fatal)"
-if ! pgrep -f "[o]pencode-volume-maintain-loop.sh" >/dev/null 2>&1; then
-  nohup bash /opt/hermes-railway/opencode-railway/opencode-volume-maintain-loop.sh >/dev/null 2>&1 &
+if ! pgrep -f "[v]olume-maintain-loop.sh" >/dev/null 2>&1; then
+  nohup bash /opt/hermes-railway/scripts/volume-maintain-loop.sh >/dev/null 2>&1 &
   echo "[entrypoint] daily volume maintenance scheduled (interval ${OPENCODE_VOLUME_MAINTAIN_INTERVAL_SEC:-86400}s)"
 fi
 
-# Prism org workspace: n8n-as-code at root + prism-platform-ap/* sibling repos.
+# Workspace bootstrap: n8n-as-code plus optional org documentation.
 if [ "${WORKSPACE_BOOTSTRAP:-}" = "true" ] || [ -n "${GIT_REPO_N8N:-}" ]; then
   export WORKSPACE_ROOT="${HERMES_HOME}/home/workspace"
   export WORKSPACE_BOOTSTRAP="${WORKSPACE_BOOTSTRAP:-true}"
@@ -377,24 +377,6 @@ print(f"[entrypoint] {plugin_name} plugin version={version} tools_registered={le
 PY
 fi
 
-if [ -f "${HERMES_HOME}/.hermes/plugins/opencode-delegate/plugin.yaml" ]; then
-  python3 - <<'PY' || true
-import re
-from pathlib import Path
-
-plugin_name = "opencode-delegate"
-plugin_dir = Path("/data/.hermes/plugins") / plugin_name
-yaml_text = (plugin_dir / "plugin.yaml").read_text(encoding="utf-8")
-init_text = (plugin_dir / "__init__.py").read_text(encoding="utf-8")
-version = "unknown"
-for line in yaml_text.splitlines():
-    if line.strip().startswith("version:"):
-        version = line.split(":", 1)[1].strip().strip('"').strip("'")
-        break
-tools = sorted(set(re.findall(r'"opencode_[a-z_]+"', init_text)))
-print(f"[entrypoint] {plugin_name} plugin version={version} tools_registered={len(tools)}")
-PY
-fi
 
 # Default webhook URL for Cursor delegations when running on Railway.
 if [ -z "${CURSOR_WEBHOOK_URL:-}" ] && [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
@@ -417,25 +399,21 @@ if cfg_path.exists():
         cfg = {}
 
 cursor_configured = bool((os.environ.get("CURSOR_API_KEY") or "").strip())
-opencode_configured = bool(
-    (os.environ.get("OPENCODE_SERVER_URL") or "").strip()
-    and (os.environ.get("OPENCODE_SERVER_PASSWORD") or "").strip()
-)
 
 plugins = cfg.setdefault("plugins", {})
 enabled = plugins.setdefault("enabled", [])
 toolsets = cfg.setdefault("toolsets", [])
 changed = False
 
-if "paperclip" in enabled:
-    enabled.remove("paperclip")
-    changed = True
-    print("[entrypoint] removed stale paperclip plugin from config.yaml")
-
-if "paperclip" in toolsets:
-    toolsets.remove("paperclip")
-    changed = True
-    print("[entrypoint] removed stale paperclip toolset from config.yaml")
+for stale_plugin, stale_toolset in (("paperclip", "paperclip"), ("opencode-delegate", "opencode_delegate")):
+    if stale_plugin in enabled:
+        enabled.remove(stale_plugin)
+        changed = True
+        print(f"[entrypoint] removed stale {stale_plugin} plugin from config.yaml")
+    if stale_toolset in toolsets:
+        toolsets.remove(stale_toolset)
+        changed = True
+        print(f"[entrypoint] removed stale {stale_toolset} toolset from config.yaml")
 
 if cursor_configured:
     if "cursor-cloud" not in enabled:
@@ -446,16 +424,6 @@ if cursor_configured:
         toolsets.append("cursor_cloud")
         changed = True
         print("[entrypoint] enabled cursor_cloud toolset in config.yaml")
-
-if opencode_configured:
-    if "opencode-delegate" not in enabled:
-        enabled.append("opencode-delegate")
-        changed = True
-        print("[entrypoint] enabled opencode-delegate plugin in config.yaml")
-    if "opencode_delegate" not in toolsets:
-        toolsets.append("opencode_delegate")
-        changed = True
-        print("[entrypoint] enabled opencode_delegate toolset in config.yaml")
 
 if changed:
     cfg_path.write_text(yaml.safe_dump(cfg, sort_keys=False))
@@ -475,19 +443,6 @@ POLL
   echo "Add a Hermes cron job (every 10m) that runs: ${CURSOR_POLL_SCRIPT}"
 fi
 
-OPENCODE_POLL_SCRIPT="${HERMES_HOME}/cron/opencode-delegate-poll.sh"
-if [ ! -f "${OPENCODE_POLL_SCRIPT}" ]; then
-  cat > "${OPENCODE_POLL_SCRIPT}" <<'POLL'
-#!/bin/bash
-set -euo pipefail
-export HERMES_HOME="${HERMES_HOME:-/data}"
-export PATH="/opt/hermes/.venv/bin:/data/.local/bin:${PATH}"
-python3 /data/.hermes/plugins/opencode-delegate/poll_pending.py >> /data/logs/opencode-poll.log 2>&1
-POLL
-  chmod +x "${OPENCODE_POLL_SCRIPT}"
-  echo "Installed OpenCode poll script at ${OPENCODE_POLL_SCRIPT}"
-  echo "Add a Hermes cron job (every 10m) that runs: ${OPENCODE_POLL_SCRIPT}"
-fi
 
 if [ -z "${ADMIN_PASSWORD:-}" ]; then
   if [ -f "${ADMIN_PASSWORD_FILE}" ]; then

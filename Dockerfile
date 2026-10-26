@@ -106,7 +106,6 @@ COPY admin ./admin
 COPY plugins ./plugins
 COPY skills ./skills
 COPY scripts ./scripts
-COPY opencode-railway ./opencode-railway
 COPY entrypoint.sh ./entrypoint.sh
 
 # Owned by `hermes` so `git fetch`/`hermes update` from the Web TUI do not trip
@@ -115,12 +114,8 @@ RUN chmod +x \
       /opt/hermes-railway/entrypoint.sh \
       /opt/hermes-railway/scripts/prism-workspace-bootstrap.sh \
       /opt/hermes-railway/scripts/volume-hygiene.sh \
-      /opt/hermes-railway/scripts/opencode-volume-maintain.sh \
-      /opt/hermes-railway/scripts/opencode-mcp-bootstrap.sh \
-      /opt/hermes-railway/scripts/opencode-workspace-ensure.sh \
-      /opt/hermes-railway/scripts/opencode-workspace-prep-test.sh \
-      /opt/hermes-railway/opencode-railway/workspace-bootstrap.sh \
-      /opt/hermes-railway/opencode-railway/opencode-volume-maintain-loop.sh && \
+      /opt/hermes-railway/scripts/volume-maintain-loop.sh \
+      /opt/hermes-railway/scripts/opencode-volume-maintain.sh && \
     mkdir -p /data && \
     chown -R hermes:hermes \
       /opt/hermes \

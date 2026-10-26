@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
-# Clone or pull prism-platform-ap org repos into a Hermes/OpenCode workspace volume.
+# Clone or pull n8n-as-code and optional Prism documentation into the workspace.
 # Layout mirrors Hermes WebUI workspace:
 #   ${WORKSPACE_ROOT}/              <- n8n-as-code root (AGENTS.md, workflows/, ...)
-#   ${WORKSPACE_ROOT}/prism-platform-ap/{prism-platform, prism-playbook, ...}
+#   ${WORKSPACE_ROOT}/prism-platform-ap/{prism-playbook, prism-knowledge, ...}
 set -euo pipefail
 
-WORKSPACE_ROOT="${WORKSPACE_ROOT:-${OPENCODE_WORKSPACE:-/data/workspace}}"
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-${HERMES_HOME:-/data}/home/workspace}"
 ORG_DIR="${WORKSPACE_ROOT}/prism-platform-ap"
 PREFIX="${WORKSPACE_BOOTSTRAP_PREFIX:-[prism-workspace]}"
-# Comma list: n8n,platform,playbook,knowledge — default all for Hermes; OpenCode uses n8n,platform
-WORKSPACE_BOOTSTRAP_REPOS="${WORKSPACE_BOOTSTRAP_REPOS:-n8n,platform,playbook,knowledge}"
+# Comma list: n8n,playbook,knowledge. Prism Platform is intentionally excluded.
+WORKSPACE_BOOTSTRAP_REPOS="${WORKSPACE_BOOTSTRAP_REPOS:-n8n,playbook,knowledge}"
 
 GIT_REPO_N8N="${GIT_REPO_N8N:-https://github.com/Christian-Starcke/n8n-as-code}"
 GIT_REPO_PLAYBOOK="${GIT_REPO_PLAYBOOK:-https://github.com/prism-platform-ap/prism-playbook}"
-GIT_REPO_PLATFORM="${GIT_REPO_PLATFORM:-https://github.com/prism-platform-ap/prism-platform}"
 GIT_REPO_KNOWLEDGE="${GIT_REPO_KNOWLEDGE:-https://github.com/prism-platform-ap/prism-knowledge}"
 
 mkdir -p "${WORKSPACE_ROOT}" "${ORG_DIR}"
@@ -97,13 +96,6 @@ link_project_board() {
   fi
 }
 
-link_gtm_dashboard() {
-  local target="${WORKSPACE_ROOT}/gtm-dashboard"
-  local app="${ORG_DIR}/prism-platform/apps/gtm-dashboard"
-  if [ -d "${app}" ] && [ ! -e "${target}" ]; then
-    ln -sfn "prism-platform-ap/prism-platform/apps/gtm-dashboard" "${target}"
-  fi
-}
 
 configure_n8n_env() {
   if [ -z "${N8N_API_KEY:-}" ] || [ ! -f "${WORKSPACE_ROOT}/n8nac-config.json" ]; then
@@ -142,9 +134,6 @@ configure_git_auth
 
 if repo_enabled n8n; then
   clone_or_pull_root_n8n
-fi
-if repo_enabled platform; then
-  clone_or_pull "${GIT_REPO_PLATFORM}" "${ORG_DIR}/prism-platform"
   link_n8n_org_symlink
 fi
 if repo_enabled knowledge; then
@@ -155,7 +144,6 @@ if repo_enabled playbook; then
 fi
 
 link_project_board
-link_gtm_dashboard
 configure_n8n_env
 
 echo "${PREFIX} workspace ready at ${WORKSPACE_ROOT} (repos: ${WORKSPACE_BOOTSTRAP_REPOS})"
