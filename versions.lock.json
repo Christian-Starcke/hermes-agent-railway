@@ -1,7 +1,7 @@
 {
   "hermes_webui": "v0.52.544",
-  "hermes_agent": "v0.23.0",
+  "hermes_agent": "v0.23.1",
   "hermes_agent_hold": false,
-  "updated_at": "2026-11-05T23:18:06Z",
+  "updated_at": "2026-11-10T14:24:43Z",
   "note": "hermes_agent upgraded from 4a9447c7 (post-v0.19.0 pin) to release v2026.9.11 (v0.21.2). Hold cleared: verified GET /api/model/options is present in v2026.9.11 (gateway/platforms/api_server.py line 79), so the original hold reason no longer applies. Auto-bump via upstream-release-watch resumes."
 }
